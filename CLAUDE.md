@@ -372,6 +372,10 @@ FFmpeg is bundled with the app and doesn't require system installation:
 
 For offline local engines (whisper.cpp, Parakeet/Orukeet, Cohere) the renderer also keeps a 16 kHz mono PCM copy of the same stream from the moment the mic opens (`pcmTap.js`, pre-roll included, capped at 4 minutes) and sends that WAV instead of the WebM, so no FFmpeg decode runs after stop; the WebM still goes to history and remains the fallback for cloud providers and long recordings.
 
+Streaming dictation has its own pre-roll (`streamingPreRoll.js`): a capture prepared in streaming mode runs the session's `pcm-streaming-processor` node on the persistent 16 kHz context from key-down and keeps its newest 1.5 s of frames (dropped when the prepare is older than `PRE_ROLL_MAX_AGE_MS`). `startStreamingRecording` adopts that node, so pre-roll and live frames are one sequence, and holds them all until the provider's start resolves (main drops frames sent with no live session, and providers cap their connect buffers at 3 s). The streaming fallback recorder still starts at the session start, so a failed-over upload lacks that opening.
+
+A user's stop (push release, tap stop) can keep capturing briefly (`recordingTailPolicy.js`): when the newest 150 ms of input is ≥ 10 dB over the recording's noise floor (10th percentile of 25 ms float-analyser readings; at least −50 dBFS), capture runs on 250 ms, extended in 50 ms steps while speech continues, never past 400 ms; a settled input stops at once. `stopRecording`/`stopStreamingRecording` take `{ allowTail }`, which only `performStopRecording` passes, and not after a main-process force stop; deferred stops, cancel, errors and mic loss never get a tail. During it the recording counts as stopping (a repeated stop is a no-op, Esc still cancels and discards at once), and the hook plays the stop cue only after `waitForRecordingTail()` resolves true.
+
 ### 3. Local Whisper Models (GGML format)
 
 Models stored in `~/.cache/openwhispr/whisper-models/`:

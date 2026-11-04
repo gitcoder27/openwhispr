@@ -320,32 +320,56 @@ export const useAudioRecording = (toast, options = {}) => {
     }
     if (stopLockRef.current) return false;
     stopLockRef.current = true;
+    let cancelHotkeyHeld = false;
+    const releaseCancelHotkey = () => {
+      if (!cancelHotkeyHeld) return;
+      cancelHotkeyHeld = false;
+      window.electronAPI?.unregisterCancelHotkey?.();
+    };
     try {
       if (!audioManagerRef.current) return false;
 
       const currentState = audioManagerRef.current.getState();
       if (!currentState.isRecording && !currentState.isStreamingStartInProgress) return false;
 
-      window.electronAPI?.unregisterCancelHotkey?.();
+      cancelHotkeyHeld = true;
       setIsPreparing(false);
       setIsStopping(true);
       // Contract to the stable thinking state before MediaRecorder/streaming
       // finalization can occupy the renderer on slower Windows machines.
       await waitForVisualFrames();
 
+      // A user's stop may keep capturing briefly while the last word is still
+      // sounding (recordingTailPolicy.js); a push the main process ended
+      // without a release (timeout, reset) stops at once. The stop cue waits
+      // until capture has actually ended, so a tail never records it, and
+      // stays silent when the tail ended in a cancel. The stop lock covers the
+      // tail, so a second stop meanwhile is a no-op. Esc stays registered
+      // until capture ends, so it can still discard the recording during a tail.
+      const allowTail = !pushForceStoppedRef.current;
+      const captureStopped = async () => {
+        try {
+          return (await audioManagerRef.current?.waitForRecordingTail?.()) !== false;
+        } finally {
+          releaseCancelHotkey();
+        }
+      };
+
       if (currentState.isStreaming || currentState.isStreamingStartInProgress) {
-        void playStopCue();
-        return await audioManagerRef.current.stopStreamingRecording();
+        const stopping = audioManagerRef.current.stopStreamingRecording({ allowTail });
+        if (await captureStopped()) void playStopCue();
+        return await stopping;
       }
 
-      const didStop = audioManagerRef.current.stopRecording();
+      const didStop = audioManagerRef.current.stopRecording({ allowTail });
 
-      if (didStop) {
-        void playStopCue();
+      if (await captureStopped()) {
+        if (didStop) void playStopCue();
       }
 
       return didStop;
     } finally {
+      releaseCancelHotkey();
       stopLockRef.current = false;
       setIsStopping(false);
     }

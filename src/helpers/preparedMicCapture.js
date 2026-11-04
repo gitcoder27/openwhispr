@@ -8,7 +8,9 @@ export const PREPARED_MAX_AGE_MS = 10000;
 // dictate. The stream is still reusable; only the buffered chunks are not.
 export const PRE_ROLL_MAX_AGE_MS = 2000;
 
-export const discardPreRoll = (prepared) => {
+// The batch pre-roll: a MediaRecorder (plus its PCM tap) started on the
+// prepared stream.
+export const discardBatchPreRoll = (prepared) => {
   const recorder = prepared?.recorder;
   if (recorder) {
     try {
@@ -26,6 +28,38 @@ export const discardPreRoll = (prepared) => {
     prepared.pcmTap.close();
     prepared.pcmTap = null;
   }
+};
+
+// The streaming pre-roll: the session's worklet node, already rendering the
+// prepared stream into a bounded frame buffer. Detached from the stream and
+// told to stop, so it neither holds the graph nor keeps posting frames.
+export const discardStreamingPreRoll = (prepared) => {
+  const preRoll = prepared?.streamingPreRoll;
+  if (!preRoll) return;
+  prepared.streamingPreRoll = null;
+  try {
+    if (preRoll.processor?.port) {
+      preRoll.processor.port.onmessage = null;
+      preRoll.processor.port.postMessage("stop");
+    }
+    preRoll.processor?.disconnect();
+  } catch {
+    // Node already torn down with its context.
+  }
+  try {
+    preRoll.source?.disconnect();
+  } catch {
+    // Source already torn down with its context.
+  }
+  if (preRoll.buffer) {
+    preRoll.buffer.frames = [];
+    preRoll.buffer.samples = 0;
+  }
+};
+
+export const discardPreRoll = (prepared) => {
+  discardBatchPreRoll(prepared);
+  discardStreamingPreRoll(prepared);
 };
 
 export const disposePreparedCapture = (prepared) => {

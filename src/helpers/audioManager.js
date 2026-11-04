@@ -26,9 +26,23 @@ import { isMicWarm, WARMUP_ACQUIRE_TIMEOUT_MS } from "./micWarmState";
 import {
   PreparedMicCapture,
   disposePreparedCapture,
+  discardBatchPreRoll,
   discardPreRoll,
+  discardStreamingPreRoll,
   PRE_ROLL_MAX_AGE_MS,
 } from "./preparedMicCapture";
+import {
+  appendPreRollFrame,
+  createStreamingPreRollBuffer,
+  takePreRollFrames,
+} from "./streamingPreRoll";
+import {
+  LEVEL_READING_MS,
+  continueRecordingTail,
+  createLevelHistory,
+  decideRecordingTail,
+  recordLevel,
+} from "./recordingTailPolicy";
 import { MicStreamHold } from "./micStreamHold";
 import { PcmTap } from "./pcmTap";
 import { ActiveMicRecoveryController } from "./activeMicRecovery";
@@ -757,6 +771,11 @@ class AudioManager {
     this.streamingFallbackReason = null;
     this._streamingFailoverReason = null;
     this._streamingSpeechGateState = null;
+    // Post-release tail (recordingTailPolicy.js): the running tail, if any, and
+    // the level history it is decided from.
+    this._recordingTail = null;
+    this._tailLevels = null;
+    this._batchRecordingGeneration = 0;
     this.warmupFailureStreak = 0;
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
@@ -1388,9 +1407,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
             recorder: null,
             chunks: [],
             pcmTap: null,
+            streamingPreRoll: null,
             startedAt: Date.now(),
           };
-          if (!this.shouldUseStreaming()) this._startPreRollRecorder(value, pcmTap);
+          if (this.shouldUseStreaming()) await this._startStreamingPreRoll(value);
+          else this._startPreRollRecorder(value, pcmTap);
           if (!value.pcmTap) pcmTap?.close();
           return value;
         } catch (error) {
@@ -1399,7 +1420,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         }
       });
       if (prepared) {
-        logger.debug("Microphone capture prepared", { preRoll: !!prepared.recorder }, "audio");
+        logger.debug(
+          "Microphone capture prepared",
+          {
+            preRoll: !!prepared.recorder || !!prepared.streamingPreRoll,
+            preRollKind: prepared.streamingPreRoll
+              ? "streaming"
+              : prepared.recorder
+                ? "batch"
+                : null,
+          },
+          "audio"
+        );
       }
       return prepared;
     } catch (e) {
@@ -1445,6 +1477,209 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     } catch (e) {
       logger.debug("Pre-roll recorder unavailable", { error: e.message }, "audio");
     }
+  }
+
+  // Streaming counterpart of the pre-roll recorder: the session's own worklet
+  // node, on the context the session will use (so the provider gets the sample
+  // rate it expects), rendering the prepared stream into a bounded buffer from
+  // the first frame. startStreamingRecording adopts the node itself, so the
+  // buffered frames and the live ones are one continuous sequence.
+  async _startStreamingPreRoll(prepared) {
+    let source = null;
+    let processor = null;
+    try {
+      const audioContext = await this.getOrCreateAudioContext();
+      if (!this.workletModuleLoaded) {
+        await audioContext.audioWorklet.addModule(this.getWorkletBlobUrl());
+        this.workletModuleLoaded = true;
+      }
+      source = audioContext.createMediaStreamSource(prepared.stream);
+      processor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      const buffer = createStreamingPreRollBuffer({ sampleRate: audioContext.sampleRate });
+      processor.port.onmessage = (event) => {
+        if (event.data === "flushed") return;
+        appendPreRollFrame(buffer, event.data);
+      };
+      source.connect(processor);
+      prepared.streamingPreRoll = { audioContext, source, processor, buffer };
+    } catch (e) {
+      try {
+        processor?.disconnect();
+        source?.disconnect();
+      } catch {
+        // Nothing connected yet.
+      }
+      logger.debug("Streaming pre-roll unavailable", { error: e.message }, "audio");
+    }
+  }
+
+  // Takes the prepared streaming pre-roll for a starting session. Until the
+  // session installs its own handler, the node's frames keep landing in the
+  // returned `pending` array right behind the buffered ones, with no trimming:
+  // from here on they are the recording, not pre-roll.
+  _adoptStreamingPreRoll(prepared) {
+    const preRoll = prepared?.streamingPreRoll;
+    if (!preRoll) return null;
+    prepared.streamingPreRoll = null;
+    const taken = takePreRollFrames(preRoll.buffer, { startedAt: prepared.startedAt });
+    const pending = taken.frames;
+    preRoll.processor.port.onmessage = (event) => {
+      if (event.data !== "flushed") pending.push(event.data);
+    };
+    logger.debug(
+      "Streaming pre-roll adopted",
+      {
+        preRollMs: taken.ms,
+        frames: pending.length,
+        stale: taken.stale,
+        trimmedSamples: preRoll.buffer.droppedSamples,
+      },
+      "streaming"
+    );
+    return { ...preRoll, pending, preRollMs: taken.ms };
+  }
+
+  _disposeAdoptedStreamingPreRoll(adopted) {
+    if (!adopted) return;
+    discardStreamingPreRoll({ streamingPreRoll: adopted });
+    adopted.pending.length = 0;
+  }
+
+  // Full-precision input levels for the post-release tail decision, read from
+  // the recording's analyser every LEVEL_READING_MS over just the newest
+  // LEVEL_READING_MS of samples, so consecutive readings don't overlap.
+  _startTailLevelTracker(analyser, audioContext) {
+    this._stopTailLevelTracker();
+    if (!analyser || typeof analyser.getFloatTimeDomainData !== "function") return;
+    const history = createLevelHistory();
+    const data = new Float32Array(analyser.fftSize);
+    const windowSamples = Math.max(
+      1,
+      Math.min(
+        data.length,
+        Math.round(((audioContext?.sampleRate || 48000) * LEVEL_READING_MS) / 1000)
+      )
+    );
+    const sample = () => {
+      if (audioContext?.state !== "running") return;
+      try {
+        analyser.getFloatTimeDomainData(data);
+      } catch {
+        return;
+      }
+      let sum = 0;
+      for (let i = data.length - windowSamples; i < data.length; i++) sum += data[i] * data[i];
+      recordLevel(history, Math.sqrt(sum / windowSamples), performance.now());
+    };
+    this._tailLevels = {
+      analyser,
+      history,
+      sample,
+      timer: setInterval(sample, LEVEL_READING_MS),
+    };
+  }
+
+  _stopTailLevelTracker() {
+    if (!this._tailLevels) return;
+    clearInterval(this._tailLevels.timer);
+    this._tailLevels = null;
+  }
+
+  // Reads the level once more at the stop request (so the decision sees the
+  // freshest samples, not the last tick's) and decides the tail.
+  _decideRecordingTail(kind) {
+    const levels = this._tailLevels;
+    if (!levels) return { extendMs: 0, reason: "no_levels" };
+    levels.sample();
+    const decision = decideRecordingTail(levels.history, performance.now());
+    logger.debug(
+      "Recording stop tail decision",
+      {
+        kind,
+        extendMs: decision.extendMs,
+        reason: decision.reason,
+        trailingDb: decision.trailingDb,
+        latestDb: decision.latestDb,
+        floorDb: decision.floorDb,
+        thresholdDb: decision.thresholdDb,
+        floorReadings: decision.floorReadings,
+      },
+      "audio"
+    );
+    return decision;
+  }
+
+  // Keeps capturing for the decided tail, extending in short steps while
+  // speech energy continues (capped by the policy). Resolves true once capture
+  // should stop, false when aborted (cancel, cleanup); `onFinish` runs only on
+  // the former. While it runs the recording counts as already stopping.
+  _runRecordingTail(kind, decision, onFinish = null) {
+    let resolveTail;
+    const tail = {
+      kind,
+      startedAt: performance.now(),
+      timer: null,
+      promise: new Promise((resolve) => {
+        resolveTail = resolve;
+      }),
+      resolve: (value) => resolveTail(value),
+    };
+    const schedule = (ms) => {
+      tail.timer = setTimeout(() => {
+        if (this._recordingTail !== tail) return;
+        this._tailLevels?.sample();
+        const elapsedMs = performance.now() - tail.startedAt;
+        const more = this._tailLevels
+          ? continueRecordingTail(this._tailLevels.history, performance.now(), {
+              elapsedMs,
+              thresholdDb: decision.thresholdDb,
+            })
+          : 0;
+        if (more > 0) {
+          schedule(more);
+          return;
+        }
+        this._recordingTail = null;
+        logger.debug(
+          "Recording stop tail applied",
+          { kind, tailMs: Math.round(elapsedMs), initialMs: decision.extendMs },
+          "audio"
+        );
+        try {
+          onFinish?.();
+        } finally {
+          tail.resolve(true);
+        }
+      }, ms);
+    };
+    this._recordingTail = tail;
+    schedule(decision.extendMs);
+    return tail.promise;
+  }
+
+  _abortRecordingTail() {
+    const tail = this._recordingTail;
+    if (!tail) return false;
+    clearTimeout(tail.timer);
+    this._recordingTail = null;
+    logger.debug(
+      "Recording stop tail aborted",
+      { kind: tail.kind, afterMs: Math.round(performance.now() - tail.startedAt) },
+      "audio"
+    );
+    tail.resolve(false);
+    return true;
+  }
+
+  // Resolves once capture has actually stopped after a stop request: at once
+  // without a tail, after it otherwise. False when the tail was aborted (the
+  // recording was cancelled instead), so the caller skips the stop cue.
+  waitForRecordingTail() {
+    return this._recordingTail?.promise ?? Promise.resolve(true);
+  }
+
+  isRecordingTailActive() {
+    return this._recordingTail != null;
   }
 
   // Offline local engines decode a renderer-captured 16 kHz WAV as-is, so the
@@ -1660,6 +1895,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           const rms = Math.sqrt(sum / dataArray.length);
           recordLocalSpeechWindow(this._localSpeechGateState, rms, peak);
         }, 100);
+        this._startTailLevelTracker(this._silenceAnalyser, this._silenceCtx);
       } catch (e) {
         logger.warn("Audio level gate setup failed, skipping", { error: e.message }, "audio");
         this._localSpeechGateState = null;
@@ -1691,6 +1927,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.createBatchRecorder(micStream, preRoll);
       freshTap?.attach(micStream);
       preparedAdopted = true;
+      this._batchRecordingGeneration = (this._batchRecordingGeneration ?? 0) + 1;
       this.isRecording = true;
       this.onStateChange?.({
         isRecording: true,
@@ -1765,6 +2002,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return true;
     } catch (error) {
       this._cancelActivationCapture(this._takeActivationCapture());
+      if (!this.isRecording) this._stopTailLevelTracker();
       // A prepared value the recording never adopted still owns a live stream
       // (and possibly a pre-roll recorder); release it before any retry.
       freshTap?.close();
@@ -2019,7 +2257,34 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  stopRecording() {
+  // `allowTail` is only for a user's stop (push release, tap stop): capture may
+  // then run on briefly while the last word is still sounding (see
+  // recordingTailPolicy.js). Returns true when a stop is underway; during a
+  // tail a repeated stop is a no-op that reports the same stop.
+  stopRecording({ allowTail = false } = {}) {
+    if (this._recordingTail?.kind === "batch") return true;
+    if (
+      allowTail &&
+      !this._rotatingBatchRecorder &&
+      !this.isStreaming &&
+      this.mediaRecorder?.state === "recording"
+    ) {
+      const decision = this._decideRecordingTail("batch");
+      if (decision.extendMs > 0) {
+        this.micRecovery.stop();
+        const generation = this._batchRecordingGeneration;
+        void this._runRecordingTail("batch", decision, () => {
+          // The recording may have ended on its own meanwhile (its mic died,
+          // which finalizes it); never stop a later recording in its place.
+          if (generation === this._batchRecordingGeneration) this._stopRecordingNow();
+        });
+        return true;
+      }
+    }
+    return this._stopRecordingNow();
+  }
+
+  _stopRecordingNow() {
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
       this._stopRequestedDuringMicRecovery = true;
@@ -2039,6 +2304,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   teardownSpeechGate() {
+    this._stopTailLevelTracker();
     if (this._silenceInterval) {
       clearInterval(this._silenceInterval);
       this._silenceInterval = null;
@@ -2081,6 +2347,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cancelRecording() {
+    // A cancel during the post-release tail discards at once, never after it.
+    this._abortRecordingTail();
     this._cancelActivationCapture(this._takeActivationCapture());
     this.micRecovery.stop();
     if (this._rotatingBatchRecorder) {
@@ -5249,6 +5517,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   async startStreamingRecording(forceDefaultMic = false) {
     let acquiredStream = null;
+    let adoptedPreRoll = null;
     let usedPreparedCapture = false;
     let sessionId = null;
     let providerName = null;
@@ -5293,9 +5562,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
       const t0 = performance.now();
       const prepared = forceDefaultMic ? null : await this.preparedMicCapture.take();
-      // Prepared while batch mode was expected; keep the stream, drop the pre-roll
-      // (the streaming transcript comes from the PCM worklet, not these chunks).
-      discardPreRoll(prepared);
+      // Prepared while batch mode was expected; keep the stream, drop the batch
+      // pre-roll (the streaming transcript comes from the PCM worklet, not these
+      // chunks). A streaming pre-roll is adopted: its worklet already holds the
+      // opening words.
+      discardBatchPreRoll(prepared);
+      adoptedPreRoll = this._adoptStreamingPreRoll(prepared);
       usedPreparedCapture = !!prepared;
       const constraints =
         prepared?.constraints ?? (await this.getAudioConstraints(forceDefaultMic));
@@ -5334,8 +5606,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       //    Frames sent before the connection is open are buffered (bounded) by
       //    sendAudio(), not dropped.
       const audioContext = await this.getOrCreateAudioContext();
+      if (adoptedPreRoll && adoptedPreRoll.audioContext !== audioContext) {
+        // The context the pre-roll ran on was replaced; its frames can't
+        // continue into this one.
+        this._disposeAdoptedStreamingPreRoll(adoptedPreRoll);
+        adoptedPreRoll = null;
+      }
       this.streamingAudioContext = audioContext;
-      this.streamingSource = audioContext.createMediaStreamSource(stream);
+      this.streamingSource = adoptedPreRoll?.source ?? audioContext.createMediaStreamSource(stream);
       this.streamingStream = stream;
 
       // Level source for the live waveform: the batch path reads the
@@ -5349,7 +5627,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this.workletModuleLoaded = true;
       }
 
-      this.streamingProcessor = new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      this.streamingProcessor =
+        adoptedPreRoll?.processor ?? new AudioWorkletNode(audioContext, "pcm-streaming-processor");
+      this._startTailLevelTracker(this.streamingAnalyser, audioContext);
       const provider = this.getStreamingProvider(providerName);
       // Decided once, with the provider, so a config refresh mid-recording
       // cannot change how this session's stream errors are handled. Only a
@@ -5362,6 +5642,16 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           cloudTranscriptionMode: getSettings().cloudTranscriptionMode,
         });
       let heldFrames = null;
+      if (adoptedPreRoll) {
+        // The pre-roll (and every frame since the start took it) goes out
+        // ahead of live audio, through the same gate. Held until the session
+        // has started: main drops frames that arrive with no live session, and
+        // providers cap what they buffer while connecting.
+        heldFrames = adoptedPreRoll.pending;
+        for (const frame of heldFrames) {
+          recordPcm16SpeechWindow(this._streamingSpeechGateState, frame);
+        }
+      }
 
       this.streamingProcessor.port.onmessage = (event) => {
         // The worklet posts its remaining PCM followed by a "flushed" sentinel
@@ -5381,7 +5671,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       };
 
       this.isStreaming = true;
-      this.streamingSource.connect(this.streamingProcessor);
+      // An adopted pre-roll's source already feeds this node.
+      if (!adoptedPreRoll) this.streamingSource.connect(this.streamingProcessor);
 
       const tPipeline = performance.now();
 
@@ -5476,7 +5767,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         pipelineSettings.toneStyleEnabled &&
         this.getPipelineCleanupOptions(pipelineSettings)
       ) {
-        heldFrames = [];
+        heldFrames ??= [];
         const waitMs = Math.max(0, this.toneStyleStartDeadline - performance.now());
         this.lastToneAppCategory = await Promise.race([
           this.toneStylePromise,
@@ -5547,6 +5838,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         return this.startRecording();
       }
 
+      const heldFrameCount = heldFrames?.length ?? 0;
       if (!this._streamingFailoverReason) heldFrames?.forEach((frame) => provider.send(frame));
       heldFrames = null;
 
@@ -5560,6 +5852,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           totalMs: Math.round(tWs - t0),
           usedWarmConnection: result.usedWarmConnection,
           usedPreparedCapture,
+          preRollMs: adoptedPreRoll?.preRollMs ?? 0,
+          heldFrames: heldFrameCount,
           micWarm: isMicWarm(this._micWarmedAt, Date.now()),
         },
         "streaming"
@@ -5577,6 +5871,10 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this._settleStreamingStart();
       this.stopRequestedDuringStreamingStart = false;
 
+      // Likewise an adopted pre-roll node the pipeline never took over.
+      if (adoptedPreRoll && this.streamingProcessor !== adoptedPreRoll.processor) {
+        this._disposeAdoptedStreamingPreRoll(adoptedPreRoll);
+      }
       // A stream the pipeline never took ownership of would leak the device
       // (and, when prepared, keep the mic indicator lit) — release it here.
       if (acquiredStream && this.streamingStream !== acquiredStream) {
@@ -5675,7 +5973,9 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     });
   }
 
-  async stopStreamingRecording() {
+  // `allowTail`: see stopRecording. A stop deferred until the start settles
+  // (the recording barely began) never gets a tail.
+  async stopStreamingRecording({ allowTail = false } = {}) {
     if (this.streamingStartInProgress) {
       this.stopRequestedDuringStreamingStart = true;
       logger.debug("Streaming stop requested while start is in progress", {}, "streaming");
@@ -5688,11 +5988,25 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     if (!this.isStreaming) return false;
 
     const sessionId = this._activeStreamingSessionId;
+    // Taken before any tail, so a cancel during the tail abandons this stop.
+    const cancellationGeneration = this._streamingCancellationGeneration;
+    const tailDecision = allowTail ? this._decideRecordingTail("streaming") : null;
     const spool = this._takeRecordingSpool();
     const delivery = { activationCapture: this._takeActivationCapture() };
     if (delivery.activationCapture)
       void window.electronAPI?.stopActivationCapture?.(delivery.activationCapture).catch(() => {});
-    const stopPromise = this._finalizeStreamingRecording(sessionId, delivery);
+    // Live frames keep flowing to the provider during the tail: the worklet is
+    // only told to flush once it ends.
+    const stopPromise =
+      tailDecision?.extendMs > 0
+        ? this._runRecordingTail("streaming", tailDecision).then((finished) =>
+            // An aborted tail (cancel, cleanup) abandons the recording.
+            this._finalizeStreamingRecording(sessionId, delivery, {
+              cancellationGeneration,
+              abandoned: !finished,
+            })
+          )
+        : this._finalizeStreamingRecording(sessionId, delivery, { cancellationGeneration });
     this._streamingStopPromise = stopPromise;
     this._streamingStopMode = "finalize";
     try {
@@ -5721,6 +6035,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   _requestStreamingCancellation() {
     this._streamingCancellationGeneration += 1;
+    this._abortRecordingTail();
     ReasoningService.cancelAllRequests();
     window.electronAPI?.cancelCloudTranscription?.();
     this._activeTranscriptionAbortController?.abort();
@@ -5801,7 +6116,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
-  async _finalizeStreamingRecording(sessionId, delivery = {}) {
+  async _finalizeStreamingRecording(
+    sessionId,
+    delivery = {},
+    { cancellationGeneration = this._streamingCancellationGeneration, abandoned = false } = {}
+  ) {
     if (
       sessionId !== null &&
       sessionId !== undefined &&
@@ -5811,8 +6130,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
 
     const providerName = this.getActiveStreamingProviderName();
-    const cancellationGeneration = this._streamingCancellationGeneration;
-    const wasCancelled = () => cancellationGeneration !== this._streamingCancellationGeneration;
+    const wasCancelled = () =>
+      abandoned || cancellationGeneration !== this._streamingCancellationGeneration;
     const abandonFinalization = async () => {
       this.cleanupStreamingAudio();
       this.cleanupStreamingListeners(sessionId);
@@ -5828,6 +6147,13 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       return true;
     };
+    // Cancelled during the post-release tail, before finalization began:
+    // discard like a cancel, without entering processing.
+    if (wasCancelled()) {
+      this.micRecovery.stop();
+      await Promise.all([abandonFinalization(), this.cleanupPreview({ dismiss: true })]);
+      return true;
+    }
 
     const durationSeconds = this.recordingStartTime
       ? (Date.now() - this.recordingStartTime) / 1000
@@ -5904,6 +6230,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       }
       this.streamingSource = null;
     }
+    this._stopTailLevelTracker();
     this.streamingAnalyser = null;
     this.streamingAudioContext = null;
 
@@ -6586,6 +6913,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   }
 
   cleanupStreamingAudio() {
+    this._stopTailLevelTracker();
     this._streamingFlushResolve?.();
     this._streamingFlushResolve = null;
     if (this.streamingFallbackRecorder?.state === "recording") {
@@ -6663,6 +6991,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     // Read before cleanupStreaming ends the session below.
     const streamingProviderName = this.getActiveStreamingProviderName();
     this.micRecovery.stop();
+    this._abortRecordingTail();
     this._unsubscribeSettings?.();
     this.preparedMicCapture.cancel();
     this._closeBatchPcmTap();

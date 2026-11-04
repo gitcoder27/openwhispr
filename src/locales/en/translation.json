@@ -1031,6 +1031,10 @@
         "title": "Transcription not pasted",
         "wlCopyMissing": "On this desktop, Wayland apps can only read pasted text through wl-copy. Install wl-clipboard to paste your dictations.",
         "wlCopyFailed": "wl-copy couldn't copy the text for Wayland apps, so it wasn't pasted. Press Retry to try again."
+      },
+      "selfHostedStreamFallback": {
+        "title": "Streaming failed",
+        "description": "Your self-hosted stream didn't return text, so the recording was uploaded instead."
       }
     },
     "clipboard": {
@@ -2705,7 +2709,29 @@
     "selfHosted": {
       "endpointUrl": "Endpoint URL",
       "serverUrl": "Server URL",
-      "apiKeyOptional": "API Key (optional)"
+      "apiKeyOptional": "API Key (optional)",
+      "streaming": {
+        "apiKey": "API key",
+        "apiKeyHelp": "Sent to this server as a Bearer token. Shared with the Custom provider's key.",
+        "toggle": "Stream while you speak",
+        "toggleDescription": "Sends audio as you talk, so the text is ready right after you stop. The server must support Orukeet streaming.",
+        "keyRequired": "Streaming needs an API key. Until one is saved, dictation is uploaded after you stop.",
+        "test": "Test connection",
+        "checkHttp": "Server:",
+        "checkStream": "Streaming:",
+        "ms": "OK, {{ms}} ms",
+        "lastStreamed": "Last dictation at {{time}}: streamed {{seconds}} s of audio, text ready {{finalSeconds}} s after stop.",
+        "lastFailed": "Last dictation at {{time}}: streaming failed ({{error}}).",
+        "errors": {
+          "unauthorized": "API key rejected",
+          "timeout": "Timed out",
+          "invalid_url": "Invalid address (use https://)",
+          "not_supported": "Server doesn't support streaming",
+          "unreachable": "Can't reach the server",
+          "key_missing": "No API key saved",
+          "http_error": "Server returned an error"
+        }
+      }
     },
     "enterpriseCheckout": {
       "title": "Upgrade to Enterprise",

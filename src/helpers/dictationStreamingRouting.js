@@ -4,7 +4,7 @@
 // call sites is what broke default dictation in 1.8.2 (#1624: the
 // openai-realtime entry never sent `provider`, and the hardened main-process
 // allowlist rejected undefined). Pure module, mirrors meetingTranscriptionRouting.
-import { isOrukeetStreaming } from "./selfHostedTranscription.js";
+import { isOrukeetStreaming, isSelfHostedStreaming } from "./selfHostedTranscription.js";
 import { STREAMING_ONLY_PROVIDERS } from "./transcriptionRoute.ts";
 import modelRegistryData from "../models/modelRegistryData.json" with { type: "json" };
 
@@ -223,6 +223,9 @@ export function buildStreamingSessionOptions({
   }
   if (providerName === "orukeet") {
     options.model = ORUKEET_MODEL;
+    // The Self-hosted switch always means the user's own server, never a
+    // managed Cloud session, whatever cloud mode was left saved.
+    if (isSelfHostedStreaming(settings)) options.mode = "byok";
     if (options.mode !== "byok" && pipelineOptions) options.pipelineOptions = pipelineOptions;
     if (options.mode === "byok") {
       options.baseUrl = settings.remoteTranscriptionUrl || settings.cloudTranscriptionBaseUrl;

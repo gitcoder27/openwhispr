@@ -716,6 +716,14 @@ export const useAudioRecording = (toast, options = {}) => {
             });
           }
 
+          if (result.selfHostedStreamFallback) {
+            toast({
+              title: t("hooks.audioRecording.selfHostedStreamFallback.title"),
+              description: t("hooks.audioRecording.selfHostedStreamFallback.description"),
+              variant: "default",
+            });
+          }
+
           const isStreaming = result.source?.includes("streaming");
           const { autoPasteEnabled, keepTranscriptionInClipboard } = getSettings();
 

@@ -1031,6 +1031,10 @@
         "title": "Transcription non collée",
         "wlCopyMissing": "Sur ce bureau, les applications Wayland ne peuvent lire le texte collé que via wl-copy. Installez wl-clipboard pour coller vos dictées.",
         "wlCopyFailed": "wl-copy n'a pas pu copier le texte pour les applications Wayland, il n'a donc pas été collé. Appuyez sur Réessayer pour recommencer."
+      },
+      "selfHostedStreamFallback": {
+        "title": "Échec du streaming",
+        "description": "Votre streaming auto-hébergé n'a renvoyé aucun texte, l'enregistrement a donc été envoyé à la place."
       }
     },
     "clipboard": {
@@ -2705,7 +2709,29 @@
     "selfHosted": {
       "endpointUrl": "URL du point d'accès",
       "serverUrl": "URL du serveur",
-      "apiKeyOptional": "Clé API (facultative)"
+      "apiKeyOptional": "Clé API (facultative)",
+      "streaming": {
+        "apiKey": "Clé API",
+        "apiKeyHelp": "Envoyée à ce serveur comme jeton Bearer. Identique à la clé du fournisseur personnalisé.",
+        "toggle": "Diffuser pendant que vous parlez",
+        "toggleDescription": "Envoie l'audio pendant que vous parlez, pour que le texte soit prêt dès que vous arrêtez. Le serveur doit prendre en charge le streaming Orukeet.",
+        "keyRequired": "Le streaming nécessite une clé API. Tant qu'aucune n'est enregistrée, la dictée est envoyée après l'arrêt.",
+        "test": "Tester la connexion",
+        "checkHttp": "Serveur :",
+        "checkStream": "Streaming :",
+        "ms": "OK, {{ms}} ms",
+        "lastStreamed": "Dernière dictée à {{time}} : {{seconds}} s d'audio diffusées, texte prêt {{finalSeconds}} s après l'arrêt.",
+        "lastFailed": "Dernière dictée à {{time}} : échec du streaming ({{error}}).",
+        "errors": {
+          "unauthorized": "Clé API refusée",
+          "timeout": "Délai dépassé",
+          "invalid_url": "Adresse non valide (utilisez https://)",
+          "not_supported": "Le serveur ne prend pas en charge le streaming",
+          "unreachable": "Impossible de joindre le serveur",
+          "key_missing": "Aucune clé API enregistrée",
+          "http_error": "Le serveur a renvoyé une erreur"
+        }
+      }
     },
     "enterpriseCheckout": {
       "title": "Passer à Enterprise",

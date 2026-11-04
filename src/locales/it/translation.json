@@ -1031,6 +1031,10 @@
         "title": "Trascrizione non incollata",
         "wlCopyMissing": "Su questo desktop, le app Wayland possono leggere il testo incollato solo tramite wl-copy. Installa wl-clipboard per incollare le tue dettature.",
         "wlCopyFailed": "wl-copy non è riuscito a copiare il testo per le app Wayland, quindi non è stato incollato. Premi Riprova per riprovare."
+      },
+      "selfHostedStreamFallback": {
+        "title": "Streaming non riuscito",
+        "description": "Lo streaming self-hosted non ha restituito testo, quindi la registrazione è stata caricata al suo posto."
       }
     },
     "clipboard": {
@@ -2410,7 +2414,29 @@
     "selfHosted": {
       "endpointUrl": "URL endpoint",
       "serverUrl": "URL server",
-      "apiKeyOptional": "API Key (opzionale)"
+      "apiKeyOptional": "API Key (opzionale)",
+      "streaming": {
+        "apiKey": "Chiave API",
+        "apiKeyHelp": "Inviata a questo server come token Bearer. È la stessa chiave del provider personalizzato.",
+        "toggle": "Trasmetti mentre parli",
+        "toggleDescription": "Invia l'audio mentre parli, così il testo è pronto appena ti fermi. Il server deve supportare lo streaming Orukeet.",
+        "keyRequired": "Lo streaming richiede una chiave API. Finché non ne salvi una, la dettatura viene caricata dopo l'arresto.",
+        "test": "Prova connessione",
+        "checkHttp": "Server:",
+        "checkStream": "Streaming:",
+        "ms": "OK, {{ms}} ms",
+        "lastStreamed": "Ultima dettatura alle {{time}}: {{seconds}} s di audio trasmessi, testo pronto {{finalSeconds}} s dopo l'arresto.",
+        "lastFailed": "Ultima dettatura alle {{time}}: streaming non riuscito ({{error}}).",
+        "errors": {
+          "unauthorized": "Chiave API rifiutata",
+          "timeout": "Tempo scaduto",
+          "invalid_url": "Indirizzo non valido (usa https://)",
+          "not_supported": "Il server non supporta lo streaming",
+          "unreachable": "Impossibile raggiungere il server",
+          "key_missing": "Nessuna chiave API salvata",
+          "http_error": "Il server ha restituito un errore"
+        }
+      }
     },
     "workspace": {
       "title": "Area di lavoro",

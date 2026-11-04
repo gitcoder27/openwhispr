@@ -1025,6 +1025,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   dictationRealtimeSend: (buffer) => ipcRenderer.send("dictation-realtime-send", buffer),
   dictationRealtimeFinalize: () => ipcRenderer.invoke("dictation-realtime-finalize"),
   dictationRealtimeStop: () => ipcRenderer.invoke("dictation-realtime-stop"),
+  getSelfHostedStreamStatus: () => ipcRenderer.invoke("get-self-hosted-stream-status"),
+  checkSelfHostedStreaming: (baseUrl) =>
+    ipcRenderer.invoke("check-self-hosted-streaming", { baseUrl }),
   onDictationRealtimePartial: registerListener(
     "dictation-realtime-partial",
     (callback) => (_event, data) => callback(data)

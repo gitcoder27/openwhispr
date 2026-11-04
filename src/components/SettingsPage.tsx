@@ -800,6 +800,7 @@ function TranscriptionSection({
               onUrlChange={setRemoteTranscriptionUrl}
               model={remoteTranscriptionModel}
               onModelChange={setRemoteTranscriptionModel}
+              streamingControls
             />
           )}
         </>

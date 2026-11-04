@@ -1405,6 +1405,33 @@ export interface ReferralItem {
   first_payment_at: string | null;
 }
 
+export interface SelfHostedStreamStatus {
+  outcome: "streamed" | "failed" | "connect_failed";
+  at: number;
+  audioSeconds?: number;
+  finalMs?: number;
+  error?: string;
+}
+
+export type SelfHostedCheckError =
+  | "unauthorized"
+  | "timeout"
+  | "invalid_url"
+  | "not_supported"
+  | "unreachable"
+  | "key_missing"
+  | "http_error";
+
+export interface SelfHostedStreamCheck {
+  http: {
+    ok: boolean;
+    ms: number | null;
+    status: number | null;
+    error: SelfHostedCheckError | null;
+  };
+  stream: { ok: boolean; ms: number | null; error: SelfHostedCheckError | null };
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -3657,6 +3684,8 @@ declare global {
         } & Partial<DictationLanguageMetadata>
       >;
       dictationRealtimeStop?: () => Promise<{ success: boolean; text: string }>;
+      getSelfHostedStreamStatus?: () => Promise<SelfHostedStreamStatus | null>;
+      checkSelfHostedStreaming?: (baseUrl: string) => Promise<SelfHostedStreamCheck>;
       onDictationRealtimePartial?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeFinal?: (callback: (text: string) => void) => () => void;
       onDictationRealtimeLanguage?: (

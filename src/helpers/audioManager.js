@@ -86,6 +86,7 @@ import { getTranscriptionApiKey } from "../services/fileTranscription";
 import { shouldSkipTranscriptionApiKey } from "./transcriptionAuth";
 import {
   isOrukeetStreaming,
+  isSelfHostedStreaming,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
 } from "./selfHostedTranscription";
@@ -2753,7 +2754,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       return null;
     }
 
-    const provider = s.cloudTranscriptionProvider || "openai";
+    // A self-hosted server only ever gets the panel's key, never the key of
+    // whichever cloud provider was selected before.
+    const provider = isSelfHostedTranscription(s)
+      ? "custom"
+      : s.cloudTranscriptionProvider || "openai";
 
     // Check cache (invalidate if provider changed)
     if (this.cachedApiKey !== null && this.cachedApiKeyProvider === provider) {
@@ -6440,6 +6445,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           : {}),
         ...this._takePendingResultExtras(),
         ...(batchWarning ? { warning: batchWarning } : {}),
+        // A self-hosted stream that produced no text was uploaded instead;
+        // the user chose streaming, so that is said rather than hidden.
+        ...(usedBatchFallback && isOrukeetStream && isSelfHostedStreaming(stSettings)
+          ? { selfHostedStreamFallback: true }
+          : {}),
       });
 
       // Only a stream on OpenWhispr Cloud credentials draws on the account's

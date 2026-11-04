@@ -17,6 +17,7 @@ import {
   isOrukeetEndpoint,
   isSelfHostedTranscription,
   resolveSelfHostedTranscriptionModel,
+  selfHostedSendsApiKey,
 } from "./selfHostedTranscription.js";
 import {
   isTranscriptionSelectionAllowed,
@@ -313,7 +314,7 @@ export function resolveTranscriptionRoute({
         provider: "self-hosted",
         endpoint: buildBatchEndpoint(rawUrl, base, selfHostedModel),
         model: selfHostedModel,
-        auth: isOrukeetEndpoint(s)
+        auth: selfHostedSendsApiKey(s)
           ? { scheme: "bearer", keyRef: "custom" }
           : { scheme: "none", keyRef: null },
         sizeCapBytes: null,

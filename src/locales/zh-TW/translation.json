@@ -1031,6 +1031,10 @@
         "title": "轉錄內容未貼上",
         "wlCopyMissing": "在此桌面上，Wayland 應用程式只能透過 wl-copy 讀取貼上的文字。請安裝 wl-clipboard 以貼上聽寫內容。",
         "wlCopyFailed": "wl-copy 無法為 Wayland 應用程式複製文字，因此未貼上。點按「重試」再試一次。"
+      },
+      "selfHostedStreamFallback": {
+        "title": "串流失敗",
+        "description": "自架串流沒有回傳文字，因此改為上傳錄音。"
       }
     },
     "clipboard": {
@@ -2410,7 +2414,29 @@
     "selfHosted": {
       "endpointUrl": "端點 URL",
       "serverUrl": "伺服器 URL",
-      "apiKeyOptional": "API Key（選填）"
+      "apiKeyOptional": "API Key（選填）",
+      "streaming": {
+        "apiKey": "API 金鑰",
+        "apiKeyHelp": "以 Bearer 權杖傳送到此伺服器。與自訂提供者共用同一個金鑰。",
+        "toggle": "邊說邊傳",
+        "toggleDescription": "說話時即傳送音訊，停止後文字立即可用。伺服器需支援 Orukeet 串流。",
+        "keyRequired": "串流需要 API 金鑰。儲存金鑰之前，聽寫會在停止後上傳。",
+        "test": "測試連線",
+        "checkHttp": "伺服器：",
+        "checkStream": "串流：",
+        "ms": "正常，{{ms}} 毫秒",
+        "lastStreamed": "上次聽寫（{{time}}）：已串流 {{seconds}} 秒音訊，停止後 {{finalSeconds}} 秒文字就緒。",
+        "lastFailed": "上次聽寫（{{time}}）：串流失敗（{{error}}）。",
+        "errors": {
+          "unauthorized": "API 金鑰遭拒",
+          "timeout": "逾時",
+          "invalid_url": "地址無效（請使用 https://）",
+          "not_supported": "伺服器不支援串流",
+          "unreachable": "無法連線到伺服器",
+          "key_missing": "未儲存 API 金鑰",
+          "http_error": "伺服器回傳錯誤"
+        }
+      }
     },
     "workspace": {
       "title": "工作區",

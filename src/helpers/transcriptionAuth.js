@@ -1,5 +1,5 @@
-import { isOrukeetEndpoint, isSelfHostedTranscription } from "./selfHostedTranscription.js";
+import { isSelfHostedTranscription, selfHostedSendsApiKey } from "./selfHostedTranscription.js";
 
 export function shouldSkipTranscriptionApiKey(settings) {
-  return isSelfHostedTranscription(settings) && !isOrukeetEndpoint(settings);
+  return isSelfHostedTranscription(settings) && !selfHostedSendsApiKey(settings);
 }

@@ -105,6 +105,10 @@
         "title": "لم يتم لصق النص المفرَّغ",
         "wlCopyMissing": "على سطح المكتب هذا، لا تستطيع تطبيقات Wayland قراءة النص الملصوق إلا عبر wl-copy. ثبّت wl-clipboard للصق الإملاء.",
         "wlCopyFailed": "تعذّر على wl-copy نسخ النص لتطبيقات Wayland، لذا لم يتم لصقه. اضغط على إعادة المحاولة للمحاولة مرة أخرى."
+      },
+      "selfHostedStreamFallback": {
+        "title": "فشل البث",
+        "description": "لم يُرجع البث المستضاف ذاتيًا أي نص، لذلك رُفع التسجيل بدلًا من ذلك."
       }
     },
     "clipboard": {
@@ -4575,7 +4579,29 @@
     "selfHosted": {
       "endpointUrl": "عنوان URL لنقطة النهاية",
       "serverUrl": "عنوان URL للخادم",
-      "apiKeyOptional": "مفتاح API (اختياري)"
+      "apiKeyOptional": "مفتاح API (اختياري)",
+      "streaming": {
+        "apiKey": "مفتاح API",
+        "apiKeyHelp": "يُرسل إلى هذا الخادم كرمز Bearer. هو نفس مفتاح المزوّد المخصص.",
+        "toggle": "البث أثناء التحدث",
+        "toggleDescription": "يرسل الصوت أثناء حديثك، فيكون النص جاهزًا فور التوقف. يجب أن يدعم الخادم بث Orukeet.",
+        "keyRequired": "يتطلب البث مفتاح API. حتى تحفظ مفتاحًا، يُرفع الإملاء بعد التوقف.",
+        "test": "اختبار الاتصال",
+        "checkHttp": "الخادم:",
+        "checkStream": "البث:",
+        "ms": "يعمل، {{ms}} مللي ثانية",
+        "lastStreamed": "آخر إملاء في {{time}}: بُثّت {{seconds}} ثانية من الصوت، والنص جاهز بعد {{finalSeconds}} ثانية من التوقف.",
+        "lastFailed": "آخر إملاء في {{time}}: فشل البث ({{error}}).",
+        "errors": {
+          "unauthorized": "تم رفض مفتاح API",
+          "timeout": "انتهت المهلة",
+          "invalid_url": "عنوان غير صالح (استخدم https://)",
+          "not_supported": "الخادم لا يدعم البث",
+          "unreachable": "تعذّر الوصول إلى الخادم",
+          "key_missing": "لا يوجد مفتاح API محفوظ",
+          "http_error": "أعاد الخادم خطأً"
+        }
+      }
     },
     "enterpriseCheckout": {
       "title": "الترقية إلى Enterprise",

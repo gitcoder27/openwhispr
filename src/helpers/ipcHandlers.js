@@ -1,5 +1,6 @@
 const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
+const { checkSelfHostedStreaming } = require("./selfHostedStreamCheck");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
 const path = require("path");
 const fs = require("fs");
@@ -9786,6 +9787,18 @@ class IPCHandlers {
 
     const DICTATION_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
     const ORUKEET_IDLE_TIMEOUT_MS = 60 * 1000;
+    // How the last self-hosted stream went, for Settings → Self-hosted. Kept in
+    // main so a stream that failed while the panel was closed still shows.
+    let selfHostedStreamStatus = null;
+    const recordSelfHostedStream = ({ outcome, error, audioSeconds, finalMs }) => {
+      selfHostedStreamStatus = {
+        outcome,
+        at: Date.now(),
+        ...(Number.isFinite(audioSeconds) ? { audioSeconds } : {}),
+        ...(Number.isFinite(finalMs) ? { finalMs } : {}),
+        ...(error ? { error: String(error.message || error).slice(0, 200) } : {}),
+      };
+    };
 
     const clearDictationIdleTimer = () => {
       if (this._dictationIdleTimer) {
@@ -9888,10 +9901,16 @@ class IPCHandlers {
                 pipelineOptions: options.pipelineOptions,
               });
             } else {
-              await streaming.connect({
-                apiKey: this.environmentManager.getCustomTranscriptionKey(),
-                baseUrl: options.baseUrl,
-              });
+              streaming.selfHosted = true;
+              try {
+                await streaming.connect({
+                  apiKey: this.environmentManager.getCustomTranscriptionKey(),
+                  baseUrl: options.baseUrl,
+                });
+              } catch (err) {
+                recordSelfHostedStream({ outcome: "connect_failed", error: err });
+                throw err;
+              }
             }
             return;
           }
@@ -10729,12 +10748,32 @@ class IPCHandlers {
       if (!(this._dictationStreaming instanceof OrukeetStreaming)) {
         return { success: false, error: "No Orukeet recording is active" };
       }
+      const streaming = this._dictationStreaming;
+      const startedAt = performance.now();
       try {
-        return { success: true, ...(await this._dictationStreaming.finalize()) };
+        const result = await streaming.finalize();
+        if (streaming.selfHosted) {
+          recordSelfHostedStream({
+            outcome: "streamed",
+            audioSeconds: (result.audioBytesSent || 0) / 32000,
+            finalMs: Math.round(performance.now() - startedAt),
+          });
+        }
+        return { success: true, ...result };
       } catch (error) {
+        if (streaming.selfHosted) recordSelfHostedStream({ outcome: "failed", error });
         return { success: false, error: error.message };
       }
     });
+
+    ipcMain.handle("get-self-hosted-stream-status", () => selfHostedStreamStatus);
+
+    ipcMain.handle("check-self-hosted-streaming", async (_event, { baseUrl } = {}) =>
+      checkSelfHostedStreaming({
+        baseUrl,
+        apiKey: this.environmentManager.getCustomTranscriptionKey(),
+      })
+    );
 
     ipcMain.handle("dictation-realtime-stop", async () => {
       clearDictationIdleTimer();

@@ -6,6 +6,8 @@ import { useTypingPause } from "../hooks/useTypingPause";
 import { ConnectionCheckAnnouncer } from "./ui/ConnectionCheckAnnouncer";
 import { ProviderCheckField } from "./ui/ProviderCheckField";
 import { usePanelVisible } from "./ui/usePanelVisible";
+import SelfHostedStreamingSettings from "./SelfHostedStreamingSettings";
+import { useSettingsStore } from "../stores/settingsStore";
 
 interface SelfHostedPanelProps {
   service: "transcription" | "reasoning";
@@ -13,6 +15,8 @@ interface SelfHostedPanelProps {
   onUrlChange: (url: string) => void;
   model?: string;
   onModelChange?: (model: string) => void;
+  /** Dictation only: the key, streaming switch and connection test. */
+  streamingControls?: boolean;
 }
 
 export default function SelfHostedPanel({
@@ -21,8 +25,12 @@ export default function SelfHostedPanel({
   onUrlChange,
   model,
   onModelChange,
+  streamingControls = false,
 }: SelfHostedPanelProps) {
   const { t } = useTranslation();
+  // A streaming server is asked with its key by Test connection; the model check is
+  // key-less and checks a field streaming doesn't use.
+  const streamingOn = useSettingsStore((s) => streamingControls && s.remoteTranscriptionStreaming);
   const urlHold = useFocusHold();
   const editing = useFocusHold();
   const visible = usePanelVisible();
@@ -40,6 +48,7 @@ export default function SelfHostedPanel({
       // The app sends this model's server a key this panel has no field for, so a check
       // could only ask without it.
       trimmedModel !== ORUKEET_MODEL &&
+      !streamingOn &&
       // A hidden panel is not ready to ask; a shown one asks again, and the main process
       // answers a check it remembers at once.
       visible,
@@ -73,7 +82,7 @@ export default function SelfHostedPanel({
           spellCheck={false}
         />
       </div>
-      {onModelChange && (
+      {onModelChange && !streamingOn && (
         <div className="space-y-1.5">
           <label className="block text-xs font-medium text-foreground">{t("common.model")}</label>
           <ProviderCheckField
@@ -94,6 +103,7 @@ export default function SelfHostedPanel({
           />
         </div>
       )}
+      {streamingControls && <SelfHostedStreamingSettings url={url} />}
     </div>
   );
 }

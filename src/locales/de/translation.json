@@ -1031,6 +1031,10 @@
         "title": "Transkription nicht eingefügt",
         "wlCopyMissing": "Auf diesem Desktop können Wayland-Apps eingefügten Text nur über wl-copy lesen. Installiere wl-clipboard, um deine Diktate einzufügen.",
         "wlCopyFailed": "wl-copy konnte den Text nicht für Wayland-Apps kopieren, daher wurde er nicht eingefügt. Klicke auf „Erneut versuchen“, um es noch einmal zu versuchen."
+      },
+      "selfHostedStreamFallback": {
+        "title": "Streaming fehlgeschlagen",
+        "description": "Dein selbst gehostetes Streaming lieferte keinen Text, daher wurde die Aufnahme stattdessen hochgeladen."
       }
     },
     "clipboard": {
@@ -2705,7 +2709,29 @@
     "selfHosted": {
       "endpointUrl": "Endpunkt-URL",
       "serverUrl": "Server-URL",
-      "apiKeyOptional": "API-Schlüssel (optional)"
+      "apiKeyOptional": "API-Schlüssel (optional)",
+      "streaming": {
+        "apiKey": "API-Schlüssel",
+        "apiKeyHelp": "Wird als Bearer-Token an diesen Server gesendet. Derselbe Schlüssel wie beim benutzerdefinierten Anbieter.",
+        "toggle": "Beim Sprechen streamen",
+        "toggleDescription": "Sendet das Audio, während du sprichst, damit der Text direkt nach dem Stoppen bereitsteht. Der Server muss Orukeet-Streaming unterstützen.",
+        "keyRequired": "Streaming braucht einen API-Schlüssel. Solange keiner gespeichert ist, wird das Diktat nach dem Stoppen hochgeladen.",
+        "test": "Verbindung testen",
+        "checkHttp": "Server:",
+        "checkStream": "Streaming:",
+        "ms": "OK, {{ms}} ms",
+        "lastStreamed": "Letztes Diktat um {{time}}: {{seconds}} s Audio gestreamt, Text {{finalSeconds}} s nach dem Stoppen bereit.",
+        "lastFailed": "Letztes Diktat um {{time}}: Streaming fehlgeschlagen ({{error}}).",
+        "errors": {
+          "unauthorized": "API-Schlüssel abgelehnt",
+          "timeout": "Zeitüberschreitung",
+          "invalid_url": "Ungültige Adresse (https:// verwenden)",
+          "not_supported": "Server unterstützt kein Streaming",
+          "unreachable": "Server nicht erreichbar",
+          "key_missing": "Kein API-Schlüssel gespeichert",
+          "http_error": "Server hat einen Fehler zurückgegeben"
+        }
+      }
     },
     "enterpriseCheckout": {
       "title": "Auf Enterprise upgraden",

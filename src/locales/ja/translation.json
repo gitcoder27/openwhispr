@@ -1031,6 +1031,10 @@
         "title": "文字起こしは貼り付けられませんでした",
         "wlCopyMissing": "このデスクトップでは、Wayland アプリは wl-copy を通してしか貼り付けたテキストを読み取れません。音声入力を貼り付けるには wl-clipboard をインストールしてください。",
         "wlCopyFailed": "wl-copy が Wayland アプリ向けにテキストをコピーできなかったため、貼り付けられませんでした。「再試行」を押してもう一度お試しください。"
+      },
+      "selfHostedStreamFallback": {
+        "title": "ストリーミングに失敗しました",
+        "description": "セルフホストのストリーミングからテキストが返らなかったため、録音をアップロードしました。"
       }
     },
     "clipboard": {
@@ -2410,7 +2414,29 @@
     "selfHosted": {
       "endpointUrl": "エンドポイント URL",
       "serverUrl": "サーバー URL",
-      "apiKeyOptional": "API キー（任意）"
+      "apiKeyOptional": "API キー（任意）",
+      "streaming": {
+        "apiKey": "API キー",
+        "apiKeyHelp": "Bearer トークンとしてこのサーバーに送信されます。カスタムプロバイダーのキーと共通です。",
+        "toggle": "話しながらストリーミング",
+        "toggleDescription": "話している間に音声を送るので、停止後すぐにテキストが届きます。サーバーが Orukeet ストリーミングに対応している必要があります。",
+        "keyRequired": "ストリーミングには API キーが必要です。保存するまでは、停止後に音声をアップロードします。",
+        "test": "接続をテスト",
+        "checkHttp": "サーバー:",
+        "checkStream": "ストリーミング:",
+        "ms": "OK、{{ms}} ms",
+        "lastStreamed": "前回の音声入力（{{time}}）：{{seconds}} 秒の音声をストリーミング、停止後 {{finalSeconds}} 秒でテキスト完成。",
+        "lastFailed": "前回の音声入力（{{time}}）：ストリーミングに失敗しました（{{error}}）。",
+        "errors": {
+          "unauthorized": "API キーが拒否されました",
+          "timeout": "タイムアウトしました",
+          "invalid_url": "無効なアドレスです（https:// を使用）",
+          "not_supported": "サーバーがストリーミングに対応していません",
+          "unreachable": "サーバーに接続できません",
+          "key_missing": "API キーが保存されていません",
+          "http_error": "サーバーがエラーを返しました"
+        }
+      }
     },
     "workspace": {
       "title": "ワークスペース",

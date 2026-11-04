@@ -1031,6 +1031,10 @@
         "title": "转录内容未粘贴",
         "wlCopyMissing": "在此桌面上，Wayland 应用只能通过 wl-copy 读取粘贴的文本。请安装 wl-clipboard 以粘贴听写内容。",
         "wlCopyFailed": "wl-copy 无法为 Wayland 应用复制文本，因此未粘贴。点击“重试”再试一次。"
+      },
+      "selfHostedStreamFallback": {
+        "title": "流式传输失败",
+        "description": "自托管流式传输未返回文字，因此改为上传录音。"
       }
     },
     "clipboard": {
@@ -2410,7 +2414,29 @@
     "selfHosted": {
       "endpointUrl": "端点 URL",
       "serverUrl": "服务器 URL",
-      "apiKeyOptional": "API Key（可选）"
+      "apiKeyOptional": "API Key（可选）",
+      "streaming": {
+        "apiKey": "API 密钥",
+        "apiKeyHelp": "以 Bearer 令牌发送到此服务器。与自定义提供商共用同一个密钥。",
+        "toggle": "边说边传",
+        "toggleDescription": "说话时即发送音频，停止后文字立即可用。服务器需支持 Orukeet 流式传输。",
+        "keyRequired": "流式传输需要 API 密钥。保存密钥之前，听写会在停止后上传。",
+        "test": "测试连接",
+        "checkHttp": "服务器：",
+        "checkStream": "流式传输：",
+        "ms": "正常，{{ms}} 毫秒",
+        "lastStreamed": "上次听写（{{time}}）：已流式传输 {{seconds}} 秒音频，停止后 {{finalSeconds}} 秒文字就绪。",
+        "lastFailed": "上次听写（{{time}}）：流式传输失败（{{error}}）。",
+        "errors": {
+          "unauthorized": "API 密钥被拒绝",
+          "timeout": "超时",
+          "invalid_url": "地址无效（请使用 https://）",
+          "not_supported": "服务器不支持流式传输",
+          "unreachable": "无法连接服务器",
+          "key_missing": "未保存 API 密钥",
+          "http_error": "服务器返回错误"
+        }
+      }
     },
     "workspace": {
       "title": "工作区",

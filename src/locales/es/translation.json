@@ -1031,6 +1031,10 @@
         "title": "Transcripción no pegada",
         "wlCopyMissing": "En este escritorio, las apps de Wayland solo pueden leer el texto pegado a través de wl-copy. Instala wl-clipboard para pegar tus dictados.",
         "wlCopyFailed": "wl-copy no pudo copiar el texto para las apps de Wayland, así que no se pegó. Pulsa Reintentar para volver a intentarlo."
+      },
+      "selfHostedStreamFallback": {
+        "title": "Falló el streaming",
+        "description": "Tu streaming autoalojado no devolvió texto, así que la grabación se subió en su lugar."
       }
     },
     "clipboard": {
@@ -2462,7 +2466,29 @@
     "selfHosted": {
       "endpointUrl": "URL del endpoint",
       "serverUrl": "URL del servidor",
-      "apiKeyOptional": "API Key (opcional)"
+      "apiKeyOptional": "API Key (opcional)",
+      "streaming": {
+        "apiKey": "Clave de API",
+        "apiKeyHelp": "Se envía a este servidor como token Bearer. Es la misma clave que la del proveedor personalizado.",
+        "toggle": "Transmitir mientras hablas",
+        "toggleDescription": "Envía el audio mientras hablas, así el texto está listo justo al terminar. El servidor debe admitir streaming de Orukeet.",
+        "keyRequired": "El streaming necesita una clave de API. Hasta que guardes una, el dictado se sube al terminar.",
+        "test": "Probar conexión",
+        "checkHttp": "Servidor:",
+        "checkStream": "Streaming:",
+        "ms": "OK, {{ms}} ms",
+        "lastStreamed": "Último dictado a las {{time}}: {{seconds}} s de audio transmitidos, texto listo {{finalSeconds}} s después de parar.",
+        "lastFailed": "Último dictado a las {{time}}: falló el streaming ({{error}}).",
+        "errors": {
+          "unauthorized": "Clave de API rechazada",
+          "timeout": "Tiempo de espera agotado",
+          "invalid_url": "Dirección no válida (usa https://)",
+          "not_supported": "El servidor no admite streaming",
+          "unreachable": "No se puede conectar con el servidor",
+          "key_missing": "No hay clave de API guardada",
+          "http_error": "El servidor devolvió un error"
+        }
+      }
     },
     "workspace": {
       "title": "Espacio de trabajo",

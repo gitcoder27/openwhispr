@@ -35,6 +35,10 @@ export const MIN_FLOOR_READINGS = 20;
 export const SHORT_RECORDING_FLOOR_CEILING_DBFS = -45;
 
 const MIN_DB = -120;
+// The quietest level a history bins (readings below it land in this bin).
+// Exported for the speech gate (localSpeechGate.js), which reads the same
+// histogram.
+export const LEVEL_MIN_DBFS = MIN_DB;
 const BIN_COUNT = -MIN_DB + 1; // 1 dB bins, -120..0 dBFS
 const RECENT_KEEP_MS = 1000;
 

@@ -2358,6 +2358,10 @@
           "description": "消除泄漏到麦克风中的会议音频。使用耳机或耳塞时请关闭此功能——没有需要消除的回声，而且它可能会完全抑制您的声音。"
         }
       },
+      "quietSpeechBoost": {
+        "title": "增强轻声语音",
+        "description": "在转写前提升耳语或轻声听写的音量。正常音量的音频不会被修改。"
+      },
       "vad": {
         "title": "语音活动检测",
         "description": "配置 Silero VAD 如何为本地 Whisper 转录检测并切分语音",

@@ -2410,6 +2410,10 @@
           "description": "Cancela el audio de la reunión que se filtra en tu micrófono. Déjalo desactivado cuando uses auriculares o audífonos: no hay eco que cancelar y puede suprimir tu voz por completo."
         }
       },
+      "quietSpeechBoost": {
+        "title": "Amplificar voz baja",
+        "description": "Sube el volumen del dictado susurrado o bajo antes de transcribirlo. El audio a volumen normal nunca se modifica."
+      },
       "vad": {
         "title": "Detección de actividad de voz",
         "description": "Configura cómo Silero VAD detecta y segmenta el habla para la transcripción local con Whisper",

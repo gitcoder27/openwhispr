@@ -2337,6 +2337,10 @@
           "description": "Cancela o áudio da reunião que vaza para o seu microfone. Deixe isto desativado ao usar fones de ouvido ou auriculares — não há eco para cancelar e pode suprimir totalmente a sua voz."
         }
       },
+      "quietSpeechBoost": {
+        "title": "Amplificar fala baixa",
+        "description": "Aumenta o volume do ditado sussurrado ou baixo antes da transcrição. O áudio em volume normal nunca é alterado."
+      },
       "vad": {
         "title": "Detecção de atividade de voz",
         "description": "Configure como o Silero VAD detecta e segmenta a fala na transcrição local do Whisper",

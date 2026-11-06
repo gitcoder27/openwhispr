@@ -8,7 +8,13 @@ import { assertValidCleanupOutput } from "../utils/cleanupOutput";
 import { isAzureOpenAIEndpoint } from "../utils/urlUtils";
 import { withSessionRefresh } from "../lib/auth";
 import { getBaseLanguageCode, getLanguageLabel } from "../utils/languageSupport";
-import { convertToWav, needsWavConversion } from "../utils/audioContainer";
+import {
+  convertToWav,
+  decodeToMono16k,
+  encodeWav,
+  needsWavConversion,
+} from "../utils/audioContainer";
+import { buildWav } from "../utils/wavBuilder";
 import {
   applyChineseScript,
   mergeWhisperPrompt,
@@ -18,9 +24,10 @@ import {
 import {
   createLocalSpeechGateState,
   getLocalSpeechGateDecision,
-  recordLocalSpeechWindow,
   recordPcm16SpeechWindow,
+  setSpeechGateSampleRate,
 } from "./localSpeechGate";
+import { boostQuietSpeech, parsePcm16Wav, quietSpeechHint } from "./quietSpeechBoost";
 import { reacquireIfDead } from "./micTrackHealth";
 import { isMicWarm, WARMUP_ACQUIRE_TIMEOUT_MS } from "./micWarmState";
 import {
@@ -542,6 +549,13 @@ const STREAMING_PROVIDERS = {
   "tinfoil-realtime": makeDictationRealtimeProvider("tinfoil-realtime"),
 };
 
+// The quiet-input boost sends a 16 kHz mono PCM16 WAV (32 KB/s) in place of
+// the WebM; past this size (the IPC payload guideline, about 5 minutes) the
+// original goes instead.
+const MAX_BOOSTED_WAV_BYTES = 10 * 1024 * 1024;
+const WAV_HEADER_BYTES = 44;
+const BOOSTED_WAV_BYTES_PER_SECOND = 16000 * 2;
+
 // Batch providers that must transcribe via a main-process proxy (CORS,
 // non-Bearer auth, OAuth, or attested transport) instead of a renderer fetch.
 function audioExtensionForMime(mimeType) {
@@ -780,6 +794,7 @@ class AudioManager {
     this.lastAudioBlob = null;
     this.lastAudioMetadata = null;
     this._localSpeechGateState = null;
+    this._recordingLevels = null;
     this._streamingCommitActive = false;
     this._previewFlushResolve = null;
     this._batchSegments = [];
@@ -1548,10 +1563,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
   // Full-precision input levels for the post-release tail decision, read from
   // the recording's analyser every LEVEL_READING_MS over just the newest
   // LEVEL_READING_MS of samples, so consecutive readings don't overlap.
-  _startTailLevelTracker(analyser, audioContext) {
+  // The batch speech gate and the quiet-input hint read the same readings, so
+  // the caller may pass the history to fill.
+  _startTailLevelTracker(analyser, audioContext, history = createLevelHistory()) {
     this._stopTailLevelTracker();
     if (!analyser || typeof analyser.getFloatTimeDomainData !== "function") return;
-    const history = createLevelHistory();
     const data = new Float32Array(analyser.fftSize);
     const windowSamples = Math.max(
       1,
@@ -1878,27 +1894,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         this._silenceAnalyser.fftSize = 2048;
         this._silenceSource = this._silenceCtx.createMediaStreamSource(micStream);
         this._silenceSource.connect(this._silenceAnalyser);
+        // One full-precision level tracker (25 ms float RMS, contiguous) feeds
+        // the post-release tail, the speech gate and the quiet-input hint. A
+        // stalled context records no readings, which fails the gate open.
         this._localSpeechGateState = createLocalSpeechGateState();
-        const dataArray = new Uint8Array(this._silenceAnalyser.fftSize);
-        this._silenceInterval = setInterval(() => {
-          // A stalled context reads flat silence; recording no windows fails the gate open.
-          if (this._silenceCtx?.state !== "running") return;
-          this._silenceAnalyser.getByteTimeDomainData(dataArray);
-          let sum = 0;
-          let peak = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            const v = (dataArray[i] - 128) / 128;
-            sum += v * v;
-            const abs = Math.abs(v);
-            if (abs > peak) peak = abs;
-          }
-          const rms = Math.sqrt(sum / dataArray.length);
-          recordLocalSpeechWindow(this._localSpeechGateState, rms, peak);
-        }, 100);
-        this._startTailLevelTracker(this._silenceAnalyser, this._silenceCtx);
+        this._recordingLevels = this._localSpeechGateState.levels;
+        this._startTailLevelTracker(
+          this._silenceAnalyser,
+          this._silenceCtx,
+          this._localSpeechGateState.levels
+        );
       } catch (e) {
         logger.warn("Audio level gate setup failed, skipping", { error: e.message }, "audio");
         this._localSpeechGateState = null;
+        this._recordingLevels = null;
       }
 
       this.audioChunks = [];
@@ -2192,6 +2201,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       );
       if (!this._settleProcessingPipeline(processingPipeline)) return;
       this._localSpeechGateState = null;
+      this._recordingLevels = null;
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
@@ -2305,10 +2315,6 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
 
   teardownSpeechGate() {
     this._stopTailLevelTracker();
-    if (this._silenceInterval) {
-      clearInterval(this._silenceInterval);
-      this._silenceInterval = null;
-    }
     this._silenceCtx?.close().catch(() => {});
     this._silenceCtx = null;
     this._silenceAnalyser = null;
@@ -2408,6 +2414,7 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     this._takeRecordingSpool()?.finish();
     this.teardownSpeechGate();
     this._localSpeechGateState = null;
+    this._recordingLevels = null;
 
     this.cleanupPreview({ dismiss: true });
     this._closeBatchPcmTap();
@@ -2527,6 +2534,14 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     let noAudioDetected = false;
     const speechGateDecision = getLocalSpeechGateDecision(this._localSpeechGateState);
     this._localSpeechGateState = null;
+    // Whether the recording looks quiet enough to be worth decoding for the
+    // quiet-input boost on routes that upload the WebM. Read from the same
+    // level history as the gate; missing when nothing measured the recording.
+    const recordingLevels = this._recordingLevels;
+    this._recordingLevels = null;
+    if (recordingLevels && metadata.quietSpeechHint === undefined) {
+      metadata = { ...metadata, quietSpeechHint: quietSpeechHint(recordingLevels) };
+    }
 
     const shouldUseStrongLocalWhisperGate =
       settings.useLocalWhisper && settings.localTranscriptionProvider === "whisper";
@@ -2540,10 +2555,11 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
           reason: speechGateDecision.reason,
           useLocalWhisper: settings.useLocalWhisper,
           localProvider: settings.localTranscriptionProvider,
-          peakRms: speechGateDecision.peakRms?.toFixed(4),
-          peakAmplitude: speechGateDecision.peakAmplitude?.toFixed(4),
-          speechWindowCount: speechGateDecision.speechWindowCount,
-          maxConsecutiveSpeechWindows: speechGateDecision.maxConsecutiveSpeechWindows,
+          readings: speechGateDecision.readings,
+          maxDbfs: speechGateDecision.maxDbfs,
+          floorDbfs: speechGateDecision.floorDbfs,
+          thresholdDbfs: speechGateDecision.thresholdDbfs,
+          speechMs: speechGateDecision.speechMs,
         },
         "audio"
       );
@@ -2551,6 +2567,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       this.onTranscriptionComplete?.({ success: true, text: "" });
       return;
     }
+    logger.debug(
+      "Speech gate decision",
+      {
+        skip: speechGateDecision.skip,
+        reason: speechGateDecision.reason,
+        readings: speechGateDecision.readings,
+        maxDbfs: speechGateDecision.maxDbfs,
+        floorDbfs: speechGateDecision.floorDbfs,
+        speechMs: speechGateDecision.speechMs,
+      },
+      "audio"
+    );
 
     try {
       const useLocalWhisper = settings.useLocalWhisper;
@@ -2704,6 +2732,96 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     }
   }
 
+  // Quiet-input boost (quietSpeechBoost.js) for the audio a batch route hands
+  // its engine. Returns the blob to send: the route's own input, untouched,
+  // unless the recording is quiet and the setting is on. History and the spool
+  // keep the original WebM either way (lastAudioBlob is never touched here).
+  // - rawWav (offline local engines): analysed in one pass, boosted in place
+  //   of the tap's WAV.
+  // - WebM (no rawWav): decoded to 16 kHz mono only when the recording's level
+  //   history says it is quiet, so normal recordings pay nothing; a decode that
+  //   fails, finds nothing to boost, or would exceed `maxBytes` sends the
+  //   original.
+  async _quietSpeechSource(
+    route,
+    {
+      rawWav = null,
+      audioBlob = null,
+      hint = null,
+      durationSeconds = null,
+      maxBytes = MAX_BOOSTED_WAV_BYTES,
+    } = {}
+  ) {
+    const original = rawWav ?? audioBlob;
+    const log = (fields) =>
+      logger.debug("Quiet speech boost", { route, ...fields }, "transcription");
+    if (!original?.size) return original;
+    if (getSettings().quietSpeechBoost === false) {
+      log({ applied: false, reason: "disabled" });
+      return original;
+    }
+    try {
+      if (rawWav) {
+        const analysisStart = performance.now();
+        const parsed = parsePcm16Wav(await rawWav.arrayBuffer());
+        if (!parsed) {
+          log({ applied: false, reason: "unreadable_wav", input: "rawWav" });
+          return rawWav;
+        }
+        const result = boostQuietSpeech(parsed.samples, parsed.sampleRate);
+        log({
+          applied: result.applied,
+          reason: result.reason,
+          input: "rawWav",
+          gainDb: result.gainDb,
+          speechLevelDbfs: result.speechLevelDbfs,
+          noiseFloorDbfs: result.noiseFloorDbfs,
+          analysisMs: Math.round(performance.now() - analysisStart),
+        });
+        return result.applied ? buildWav(result.samples, parsed.sampleRate) : rawWav;
+      }
+
+      if (!hint?.quiet) {
+        log({
+          applied: false,
+          reason: hint?.reason ?? "no_levels",
+          input: "webm",
+          speechLevelDbfs: hint?.speechLevelDbfs,
+          noiseFloorDbfs: hint?.noiseFloorDbfs,
+        });
+        return audioBlob;
+      }
+      if (
+        Number.isFinite(durationSeconds) &&
+        WAV_HEADER_BYTES + durationSeconds * BOOSTED_WAV_BYTES_PER_SECOND > maxBytes
+      ) {
+        log({ applied: false, reason: "too_large", input: "webm" });
+        return audioBlob;
+      }
+      const decodeStart = performance.now();
+      const decoded = await decodeToMono16k(audioBlob);
+      const decodeMs = Math.round(performance.now() - decodeStart);
+      const result = boostQuietSpeech(decoded.samples, decoded.sampleRate);
+      const wav = result.applied
+        ? new Blob([encodeWav([result.samples], decoded.sampleRate)], { type: "audio/wav" })
+        : null;
+      const tooLarge = !!wav && wav.size > maxBytes;
+      log({
+        applied: !!wav && !tooLarge,
+        reason: tooLarge ? "too_large" : result.reason,
+        input: "webm",
+        gainDb: result.gainDb,
+        speechLevelDbfs: result.speechLevelDbfs,
+        noiseFloorDbfs: result.noiseFloorDbfs,
+        decodeMs,
+      });
+      return wav && !tooLarge ? wav : audioBlob;
+    } catch (error) {
+      log({ applied: false, reason: "failed", error: error?.message });
+      return original;
+    }
+  }
+
   async processWithLocalWhisper(
     audioBlob,
     model = "base",
@@ -2715,7 +2833,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
     try {
       // The PCM tap's WAV skips FFmpeg in the main process; the WebM stays the
       // fallback and is what history and any cloud retry receive.
-      const source = metadata.rawWav ?? audioBlob;
+      const source = await this._quietSpeechSource("local-whisper", {
+        rawWav: metadata.rawWav,
+        audioBlob,
+        hint: metadata.quietSpeechHint,
+        durationSeconds: metadata.durationSeconds,
+      });
       const arrayBuffer = await source.arrayBuffer();
       const language = getBaseLanguageCode(this.getEffectiveSttLanguage(getSettings()));
       const options = { model };
@@ -2923,7 +3046,12 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         timings.transcriptionProcessingDurationMs = 0;
         result = { success: true, text: streamedText };
       } else {
-        const source = metadata.rawWav ?? audioBlob;
+        const source = await this._quietSpeechSource("local-parakeet", {
+          rawWav: metadata.rawWav,
+          audioBlob,
+          hint: metadata.quietSpeechHint,
+          durationSeconds: metadata.durationSeconds,
+        });
         const arrayBuffer = await source.arrayBuffer();
 
         logger.debug(
@@ -4363,8 +4491,20 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
       // Chromium's WebM/Opus recordings always are. Re-encode for those rather
       // than failing the dictation; a conversion failure falls through to the
       // original bytes so this can only widen what works.
-      let uploadAudio = optimizedAudio;
-      if (needsWavConversion(provider, optimizedAudio.type, optimizedAudio.size)) {
+      // A quiet recording goes up as a boosted 16 kHz WAV, which every route
+      // reaching this fetch accepts (OpenAI-compatible multipart, `audio.wav`);
+      // the proxied providers above keep the WebM, since their payloads carry
+      // no container type.
+      let uploadAudio = await this._quietSpeechSource(
+        isSelfHostedTranscription(apiSettings) ? "self-hosted" : provider,
+        {
+          audioBlob: optimizedAudio,
+          hint: metadata.quietSpeechHint,
+          durationSeconds,
+          maxBytes: Math.min(MAX_BOOSTED_WAV_BYTES, byokFileSizeLimit(provider)),
+        }
+      );
+      if (needsWavConversion(provider, uploadAudio.type, uploadAudio.size)) {
         try {
           const wavAudio = await convertToWav(optimizedAudio);
           // Keep compressed recordings usable on endpoints that already accept
@@ -5613,6 +5753,8 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
         adoptedPreRoll = null;
       }
       this.streamingAudioContext = audioContext;
+      // The failover gate's 25 ms readings are counted in this context's samples.
+      setSpeechGateSampleRate(this._streamingSpeechGateState, audioContext.sampleRate);
       this.streamingSource = adoptedPreRoll?.source ?? audioContext.createMediaStreamSource(stream);
       this.streamingStream = stream;
 
@@ -6709,7 +6851,18 @@ registerProcessor("pcm-streaming-processor", PCMStreamingProcessor);
                   },
                   wasCancelled
                 )
-              : await this.processWithOpenAIAPI(fallbackBlob, { durationSeconds }, wasCancelled);
+              : await this.processWithOpenAIAPI(
+                  fallbackBlob,
+                  {
+                    durationSeconds,
+                    // The stream's own full-precision levels decide whether the
+                    // fallback upload is worth decoding for the quiet boost.
+                    ...(this._streamingSpeechGateState
+                      ? { quietSpeechHint: quietSpeechHint(this._streamingSpeechGateState.levels) }
+                      : {}),
+                  },
+                  wasCancelled
+                );
           if (wasCancelled()) return true;
           if (batchResult?.text) {
             finalText = batchResult.text;

@@ -2653,6 +2653,10 @@
           "description": "Cancel meeting audio that leaks into your microphone. Leave this off when using headphones or earphones — there is no echo to cancel and it can suppress your voice entirely."
         }
       },
+      "quietSpeechBoost": {
+        "title": "Boost quiet speech",
+        "description": "Raises whispered or quiet dictation before transcription. Normal-volume audio is never changed."
+      },
       "vad": {
         "title": "Voice Activity Detection",
         "description": "Configure how Silero VAD detects and segments speech for local Whisper transcription",

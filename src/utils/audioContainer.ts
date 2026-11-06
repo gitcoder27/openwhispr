@@ -102,6 +102,16 @@ export function downmixToMono(channels: Float32Array[]): Float32Array {
 // use this, so they go through ffmpegUtils.convertBufferToWav instead -- both
 // paths target 16 kHz mono so the upload is identical either way.
 export async function convertToWav(blob: Blob): Promise<Blob> {
+  const { samples, sampleRate } = await decodeToMono16k(blob);
+  return new Blob([encodeWav([samples], sampleRate)], { type: "audio/wav" });
+}
+
+// The recording decoded to 16 kHz mono float samples. Shared by convertToWav
+// and the quiet-input boost (quietSpeechBoost.js), which levels the samples
+// before encoding them.
+export async function decodeToMono16k(
+  blob: Blob
+): Promise<{ samples: Float32Array; sampleRate: number }> {
   const OfflineCtor =
     (globalThis as any).OfflineAudioContext || (globalThis as any).webkitOfflineAudioContext;
   if (!OfflineCtor) throw new Error("Web Audio is unavailable in this context");
@@ -119,7 +129,5 @@ export async function convertToWav(blob: Blob): Promise<Blob> {
   const channels: Float32Array[] = [];
   for (let i = 0; i < decoded.numberOfChannels; i++) channels.push(decoded.getChannelData(i));
 
-  return new Blob([encodeWav([downmixToMono(channels)], decoded.sampleRate)], {
-    type: "audio/wav",
-  });
+  return { samples: downmixToMono(channels), sampleRate: decoded.sampleRate };
 }

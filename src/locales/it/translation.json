@@ -2358,6 +2358,10 @@
           "description": "Cancella l'audio della riunione che si infiltra nel microfono. Lascia questa opzione disattivata quando usi cuffie o auricolari: non c'è alcun eco da cancellare e potrebbe sopprimere completamente la tua voce."
         }
       },
+      "quietSpeechBoost": {
+        "title": "Amplifica la voce bassa",
+        "description": "Alza il volume della dettatura sussurrata o bassa prima della trascrizione. L'audio a volume normale non viene mai modificato."
+      },
       "vad": {
         "title": "Rilevamento attività vocale",
         "description": "Configura come Silero VAD rileva e segmenta il parlato per la trascrizione locale Whisper",

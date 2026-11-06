@@ -420,6 +420,7 @@ const BOOLEAN_SETTINGS = new Set([
   "noteRecordingSileroEnabled",
   "meetingSileroEnabled",
   "meetingAecEnabled",
+  "quietSpeechBoost",
   "isSignedIn",
   "autoPasteEnabled",
   "keepTranscriptionInClipboard",
@@ -1048,6 +1049,7 @@ export interface SettingsState
   noteRecordingSileroEnabled: boolean;
   meetingSileroEnabled: boolean;
   meetingAecEnabled: boolean;
+  quietSpeechBoost: boolean;
   whisperVadThreshold: number;
   whisperVadMinSpeechDurationMs: number;
   whisperVadMinSilenceDurationMs: number;
@@ -1379,6 +1381,7 @@ export interface SettingsState
   setNoteRecordingSileroEnabled: (value: boolean) => void;
   setMeetingSileroEnabled: (value: boolean) => void;
   setMeetingAecEnabled: (value: boolean) => void;
+  setQuietSpeechBoost: (value: boolean) => void;
   setWhisperVadThreshold: (value: number) => void;
   setWhisperVadMinSpeechDurationMs: (value: number) => void;
   setWhisperVadMinSilenceDurationMs: (value: number) => void;
@@ -1828,6 +1831,9 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   // Acoustic echo cancellation for meetings is opt-in: on headsets there's no
   // echo to cancel and it can suppress the mic entirely. See ipcHandlers AEC gate.
   meetingAecEnabled: readBoolean("meetingAecEnabled", false),
+  // Kill switch for the quiet-input boost (quietSpeechBoost.js). On by default:
+  // normal-level audio reaches the engine untouched either way.
+  quietSpeechBoost: readBoolean("quietSpeechBoost", true),
   whisperVadThreshold: clampVadValue("threshold", readString("whisperVadThreshold", "0.5")),
   whisperVadMinSpeechDurationMs: clampVadValue(
     "minSpeechDurationMs",
@@ -2688,6 +2694,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
     }
   },
   setMeetingAecEnabled: createBooleanSetter("meetingAecEnabled"),
+  setQuietSpeechBoost: createBooleanSetter("quietSpeechBoost"),
   setWhisperVadThreshold: (value: number) => {
     const next = clampVadValue("threshold", value);
     if (isBrowser) localStorage.setItem("whisperVadThreshold", String(next));

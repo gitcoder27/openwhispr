@@ -138,7 +138,7 @@ test("streaming pre-roll reaches the provider first, exactly once, then live aud
   processor.port.onmessage({ data: frame(4) });
   assert.deepEqual(tags(sent), [1, 2, 3, 4]);
   // The pre-roll frames went through the speech gate with the live ones.
-  assert.equal(manager._streamingSpeechGateState.windowCount, 4);
+  assert.equal(manager._streamingSpeechGateState.chunkCount, 4);
 });
 
 test("frames between the take and the session's handler stay in order", async (t) => {

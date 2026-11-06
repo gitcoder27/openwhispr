@@ -99,6 +99,7 @@ import DictationAgentSettings from "./settings/DictationAgentSettings";
 import DictationTranslationSettings from "./settings/DictationTranslationSettings";
 import InferenceConfigEditor from "./settings/InferenceConfigEditor";
 import { MeetingTranscriptionPanel } from "./settings/MeetingSettings";
+import { QuietSpeechBoostSettings } from "./settings/QuietSpeechBoostSettings";
 import { UploadTranscriptionPanel } from "./settings/UploadSettings";
 import LanguageSelector from "./ui/LanguageSelector";
 import { Skeleton } from "./ui/skeleton";
@@ -4955,6 +4956,7 @@ EOF`,
                   setShowTranscriptionPreview={setShowTranscriptionPreview}
                   toast={toast}
                 />
+                <QuietSpeechBoostSettings />
                 {transcriptionMode === "local" &&
                   localTranscriptionProvider === "whisper" &&
                   renderWhisperVadSettings()}

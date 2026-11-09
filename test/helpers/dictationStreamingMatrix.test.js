@@ -365,10 +365,11 @@ test("closure: shared-channel dictation providers have token entries under their
 
 test("closure: every personal meeting provider has a token entry", async () => {
   const { REALTIME_TOKEN_PROVIDERS } = await loadTokens();
-  const { ALLOWED_MEETING_PROVIDERS } = await loadMeeting();
+  const { ALLOWED_MEETING_PROVIDERS, BATCH_MEETING_PROVIDERS } = await loadMeeting();
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
+    // Batch providers mint no realtime token (self-hosted reads its saved key in main).
     // Enterprise uses the profile's socket factory, covered by enterpriseAudioTransport.test.js.
-    if (provider === "local" || provider === "enterprise-realtime") continue;
+    if (BATCH_MEETING_PROVIDERS.has(provider) || provider === "enterprise-realtime") continue;
     assert.equal(
       typeof REALTIME_TOKEN_PROVIDERS[provider],
       "function",

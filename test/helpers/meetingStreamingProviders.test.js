@@ -17,8 +17,9 @@ test("tinfoil-realtime resolves to the Tinfoil client, never the OpenAI default"
 test("every allowed realtime provider has a streaming client (no silent OpenAI fallback)", async () => {
   const { STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } = await load();
 
+  const { BATCH_MEETING_PROVIDERS } = await load();
   for (const provider of ALLOWED_MEETING_PROVIDERS) {
-    if (provider === "local") continue;
+    if (BATCH_MEETING_PROVIDERS.has(provider)) continue;
     assert.equal(
       typeof STREAMING_CLIENT_BY_PROVIDER[provider],
       "function",
@@ -27,11 +28,36 @@ test("every allowed realtime provider has a streaming client (no silent OpenAI f
   }
 });
 
-test("allow-list accepts tinfoil-realtime and local", async () => {
+test("allow-list accepts tinfoil-realtime, local and self-hosted", async () => {
   const { ALLOWED_MEETING_PROVIDERS } = await load();
 
   assert.equal(ALLOWED_MEETING_PROVIDERS.has("tinfoil-realtime"), true);
   assert.equal(ALLOWED_MEETING_PROVIDERS.has("local"), true);
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has("self-hosted"), true);
+});
+
+test("batch meeting providers have no streaming client", async () => {
+  const { BATCH_MEETING_PROVIDERS, STREAMING_CLIENT_BY_PROVIDER, ALLOWED_MEETING_PROVIDERS } =
+    await load();
+
+  assert.deepEqual([...BATCH_MEETING_PROVIDERS].sort(), ["local", "self-hosted"]);
+  for (const provider of BATCH_MEETING_PROVIDERS) {
+    assert.equal(STREAMING_CLIENT_BY_PROVIDER[provider], undefined, provider);
+    assert.equal(ALLOWED_MEETING_PROVIDERS.has(provider), true, provider);
+  }
+});
+
+test("the router's self-hosted provider id is one main accepts", async () => {
+  const { ALLOWED_MEETING_PROVIDERS } = await load();
+  const { resolveMeetingTranscriptionOptions } =
+    await import("../../src/helpers/meetingTranscriptionRouting.js");
+
+  const { provider } = resolveMeetingTranscriptionOptions({
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "http://127.0.0.1:8770",
+    language: "en",
+  });
+  assert.equal(ALLOWED_MEETING_PROVIDERS.has(provider), true);
 });
 
 test("every provider note recording offers is one the main process accepts", async () => {

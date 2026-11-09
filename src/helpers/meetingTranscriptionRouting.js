@@ -22,6 +22,23 @@ const DEFAULT_MANAGED_PROVIDER = {
   models: [{ id: "gpt-4o-mini-transcribe", default: true }],
 };
 
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+
+// The rules the main process enforces for a self-hosted server (orukeetStreaming
+// streamingUrl): no credentials or query, and HTTPS unless the server runs on
+// this machine. Checked here too so a bad address fails before recording starts.
+export function isUsableSelfHostedUrl(value) {
+  let url;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  if (url.username || url.password || url.search || url.hash) return false;
+  if (url.protocol === "https:" || url.protocol === "wss:") return true;
+  return (url.protocol === "http:" || url.protocol === "ws:") && LOOPBACK_HOSTS.has(url.hostname);
+}
+
 const resolveModel = (provider, selectedModel) =>
   provider.models.find((model) => model.id === selectedModel)?.id ??
   provider.models.find((model) => model.default)?.id ??
@@ -41,6 +58,8 @@ export function resolveMeetingTranscriptionOptions({
   cortiEnvironment,
   cortiTenant,
   keyterms,
+  remoteTranscriptionUrl,
+  remoteTranscriptionModel,
 }) {
   if (transcriptionMode === "local") {
     return {
@@ -66,12 +85,25 @@ export function resolveMeetingTranscriptionOptions({
     };
   }
 
-  // These two are reachable from a settings copy the user never made by hand —
-  // the 1.6.10 follow-flag migration carried a dictation choice Note Recording
-  // cannot serve — so they are sentinels that MeetingRecordingMount translates,
-  // not English sentences. Anything after the colon is an argument.
+  // Errors here are sentinels that MeetingRecordingMount translates, not English
+  // sentences (some are reachable from a settings copy the user never made by
+  // hand — the 1.6.10 follow-flag migration). Anything after the colon is an
+  // argument.
+  //
+  // Self-hosted meetings post pause-cut chunks to the server's batch endpoint
+  // (selfHostedMeetingSession.js). The key stays in the main process.
   if (transcriptionMode === "self-hosted") {
-    throw new Error("unsupportedSelfHosted");
+    const baseUrl = typeof remoteTranscriptionUrl === "string" ? remoteTranscriptionUrl.trim() : "";
+    if (!baseUrl) throw new Error("selfHostedUrlMissing");
+    if (!isUsableSelfHostedUrl(baseUrl)) throw new Error("selfHostedUrlInvalid");
+    const model =
+      typeof remoteTranscriptionModel === "string" ? remoteTranscriptionModel.trim() : "";
+    return {
+      provider: "self-hosted",
+      baseUrl,
+      ...(model ? { model } : {}),
+      language,
+    };
   }
 
   if (transcriptionMode !== "providers") {

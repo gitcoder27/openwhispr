@@ -1,4 +1,5 @@
-const { OrukeetStreaming, MANAGED_STREAM_OPTIONS } = require("./orukeetStreaming");
+const { OrukeetStreaming, MANAGED_STREAM_OPTIONS, streamingUrl } = require("./orukeetStreaming");
+const { createSelfHostedMeetingSession } = require("./selfHostedMeetingSession");
 const { connectManagedOrukeet } = require("./orukeetCloudSession");
 const { checkSelfHostedStreaming } = require("./selfHostedStreamCheck");
 const { ipcMain, app, shell, BrowserWindow, systemPreferences, net, session } = require("electron");
@@ -7869,6 +7870,18 @@ class IPCHandlers {
     // Must outlast one local transcription cycle so a straddling remote
     // utterance's next-cycle system transcript can confirm buffered echo.
     const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = LOCAL_MEETING_CHUNK_INTERVAL_MS + 1000;
+    // Self-hosted chunks are cut at pauses (3–15 s) and sent oldest audio first,
+    // system ahead of a near-simultaneous mic chunk, so the system text that
+    // confirms a risky mic segment usually lands within one short chunk.
+    const SELF_HOSTED_RISKY_MIC_SEGMENT_HOLDBACK_MS = 8000;
+    // main → renderer sentinels (MeetingRecordingMount's MEETING_ERROR_KEYS).
+    const SELF_HOSTED_MEETING_NOTICES = {
+      unauthorized: "selfHostedUnauthorized",
+      not_found: "selfHostedNotFound",
+      unreachable: "selfHostedUnreachable",
+      audio_dropped: "selfHostedAudioDropped",
+      drain_incomplete: "selfHostedDrainIncomplete",
+    };
     const RACING_MIC_RETRACT_WINDOW_MS = 4000;
 
     const buildNearbyTranscriptCandidates = (
@@ -8844,6 +8857,10 @@ class IPCHandlers {
     // await it: a pass that finished after the reset would push its finals into
     // the next session and send them to no window.
     let meetingLocalTranscribePromise = null;
+    // Self-hosted meetings run in local mode (same buffering, gate, holdback and
+    // diarization) but send pause-cut chunks to the server instead of an
+    // on-device engine; this session owns the segmenter and request queue.
+    let meetingSelfHostedSession = null;
     let meetingPendingMicChunks = [];
     let meetingPendingMicFinals = [];
     let meetingPendingMicFinalTimer = null;
@@ -8916,11 +8933,23 @@ class IPCHandlers {
       }
     };
 
-    const dispatchMeetingAudioBuffer = (buffer, source, synthetic = false, capturedAt = null) => {
+    const dispatchMeetingAudioBuffer = (
+      buffer,
+      source,
+      synthetic = false,
+      capturedAt = null,
+      queuedAt = null
+    ) => {
       if (meetingLocalMode) {
         // Local STT timestamps each batch with wall time, not a sample cursor.
         // Large synthetic gaps would dilute speech and inflate the next batch.
         if (synthetic) return;
+        if (meetingSelfHostedSession) {
+          // The segmenter places its chunks on the audio timeline from these
+          // capture times; a held mic chunk is timed by its arrival, not its release.
+          meetingSelfHostedSession.pushAudio(source, buffer, capturedAt ?? queuedAt ?? Date.now());
+          return;
+        }
         meetingLocalBuffers[source].push(buffer);
         return;
       }
@@ -9070,7 +9099,7 @@ class IPCHandlers {
           continue;
         }
 
-        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt);
+        dispatchMeetingAudioBuffer(next.buffer, "mic", false, capturedAt, next.queuedAt);
       }
     };
 
@@ -9232,6 +9261,126 @@ class IPCHandlers {
       return started;
     };
 
+    // Everything a batch-transcribed meeting chunk goes through once it has
+    // text: echo suppression, duplicate checks, holdback and the segment event.
+    // Shared by the on-device engines and the self-hosted server.
+    const deliverBatchMeetingTranscript = ({
+      source,
+      text,
+      segTimestamp,
+      audioStartedAt,
+      audioEndedAt,
+      holdbackMs,
+    }) => {
+      // Logs carry lengths only: transcript text never reaches the log file.
+      let micSuppression = null;
+      if (source === "mic") {
+        micSuppression = shouldSuppressMicTranscriptSegment(audioStartedAt, audioEndedAt);
+        debugLogger.debug("Local meeting transcription candidate", {
+          source,
+          chars: text.length,
+          suppress: micSuppression.suppress,
+          reason: micSuppression.reason,
+          hasBleedEvidence: micSuppression.hasBleedEvidence,
+          likelyRenderBleed: micSuppression.likelyRenderBleed,
+          averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
+          averageResidual: micSuppression.averageResidual?.toFixed(3),
+        });
+        if (micSuppression.suppress) {
+          debugLogger.debug("Suppressing contaminated local mic segment", {
+            reason: micSuppression.reason,
+            averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
+            averageResidual: micSuppression.averageResidual?.toFixed(3),
+            chars: text.length,
+          });
+          return;
+        }
+
+        if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
+          debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
+            chars: text.length,
+            averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
+            averageResidual: micSuppression.averageResidual?.toFixed(3),
+          });
+          return;
+        }
+      } else {
+        debugLogger.debug("Local meeting transcription candidate", {
+          source,
+          chars: text.length,
+        });
+      }
+
+      if (source === "system") {
+        const pending = removePendingMicFinalsFor(text, segTimestamp);
+        if (pending.length > 0) {
+          debugLogger.debug(
+            "Dropping buffered local mic segments after system transcript arrived",
+            {
+              count: pending.length,
+              chars: text.length,
+            }
+          );
+        }
+
+        const retracted = removeRacingMicEntriesFor(text, segTimestamp);
+        for (const stale of retracted) {
+          if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+            meetingLocalWin.webContents.send("meeting-transcription-segment", {
+              text: stale.text,
+              source: "mic",
+              type: "retract",
+              timestamp: stale.timestamp,
+            });
+          }
+        }
+      }
+
+      const sendLocalSegment = (channel, payload) => {
+        if (channel !== "meeting-transcription-segment") {
+          return;
+        }
+
+        if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
+          meetingLocalWin.webContents.send(channel, payload);
+        }
+      };
+
+      if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
+        debugLogger.debug("Buffering risky local mic segment before renderer commit", {
+          chars: text.length,
+          holdbackMs,
+          reason: micSuppression?.reason,
+          hasBleedEvidence: micSuppression?.hasBleedEvidence,
+        });
+        queuePendingMicFinal({
+          text,
+          timestamp: segTimestamp,
+          micSuppression,
+          holdbackMs,
+          emit: () =>
+            sendMeetingFinalSegment({
+              text,
+              source,
+              timestamp: segTimestamp,
+              micSuppression,
+              send: sendLocalSegment,
+              includeInLocalTranscript: true,
+            }),
+        });
+        return;
+      }
+
+      sendMeetingFinalSegment({
+        text,
+        source,
+        timestamp: segTimestamp,
+        micSuppression,
+        send: sendLocalSegment,
+        includeInLocalTranscript: true,
+      });
+    };
+
     const transcribeLocalMeetingChunk = async (source) => {
       const chunks = meetingLocalBuffers[source];
       if (!chunks.length) return;
@@ -9292,117 +9441,14 @@ class IPCHandlers {
         if (this._audioFeaturePolicy.activeFailure("meeting")) return;
 
         if (result?.success && result.text?.trim()) {
-          const text = result.text.trim();
           const segTimestamp = Date.now();
-          let micSuppression = null;
-          if (source === "mic") {
-            const chunkDurationMs = (pcm24k.length / 2 / 24000) * 1000;
-            micSuppression = shouldSuppressMicTranscriptSegment(
-              segTimestamp - chunkDurationMs,
-              segTimestamp
-            );
-            debugLogger.debug("Local meeting transcription candidate", {
-              source,
-              text: text.slice(0, 80),
-              suppress: micSuppression.suppress,
-              reason: micSuppression.reason,
-              hasBleedEvidence: micSuppression.hasBleedEvidence,
-              likelyRenderBleed: micSuppression.likelyRenderBleed,
-              averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
-              averageResidual: micSuppression.averageResidual?.toFixed(3),
-            });
-            if (micSuppression.suppress) {
-              debugLogger.debug("Suppressing contaminated local mic segment", {
-                reason: micSuppression.reason,
-                averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
-                averageResidual: micSuppression.averageResidual?.toFixed(3),
-                text: text.slice(0, 80),
-              });
-              return;
-            }
-
-            if (shouldSkipDuplicateMicSegment(text, segTimestamp, micSuppression)) {
-              debugLogger.debug("Skipping duplicate local mic segment that matches system audio", {
-                text: text.slice(0, 80),
-                averageCorrelation: micSuppression.averageCorrelation?.toFixed(3),
-                averageResidual: micSuppression.averageResidual?.toFixed(3),
-              });
-              return;
-            }
-          } else {
-            debugLogger.debug("Local meeting transcription candidate", {
-              source,
-              text: text.slice(0, 80),
-            });
-          }
-
-          if (source === "system") {
-            const pending = removePendingMicFinalsFor(text, segTimestamp);
-            if (pending.length > 0) {
-              debugLogger.debug(
-                "Dropping buffered local mic segments after system transcript arrived",
-                {
-                  count: pending.length,
-                  text: text.slice(0, 80),
-                }
-              );
-            }
-
-            const retracted = removeRacingMicEntriesFor(text, segTimestamp);
-            for (const stale of retracted) {
-              if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
-                meetingLocalWin.webContents.send("meeting-transcription-segment", {
-                  text: stale.text,
-                  source: "mic",
-                  type: "retract",
-                  timestamp: stale.timestamp,
-                });
-              }
-            }
-          }
-
-          const sendLocalSegment = (channel, payload) => {
-            if (channel !== "meeting-transcription-segment") {
-              return;
-            }
-
-            if (meetingLocalWin && !meetingLocalWin.isDestroyed()) {
-              meetingLocalWin.webContents.send(channel, payload);
-            }
-          };
-
-          if (source === "mic" && hasRiskyMicDuplicateProfile(micSuppression)) {
-            debugLogger.debug("Buffering risky local mic segment before renderer commit", {
-              text: text.slice(0, 80),
-              holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
-              reason: micSuppression?.reason,
-              hasBleedEvidence: micSuppression?.hasBleedEvidence,
-            });
-            queuePendingMicFinal({
-              text,
-              timestamp: segTimestamp,
-              micSuppression,
-              holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
-              emit: () =>
-                sendMeetingFinalSegment({
-                  text,
-                  source,
-                  timestamp: segTimestamp,
-                  micSuppression,
-                  send: sendLocalSegment,
-                  includeInLocalTranscript: true,
-                }),
-            });
-            return;
-          }
-
-          sendMeetingFinalSegment({
-            text,
+          deliverBatchMeetingTranscript({
             source,
-            timestamp: segTimestamp,
-            micSuppression,
-            send: sendLocalSegment,
-            includeInLocalTranscript: true,
+            text: result.text.trim(),
+            segTimestamp,
+            audioStartedAt: segTimestamp - (pcm24k.length / 2 / 24000) * 1000,
+            audioEndedAt: segTimestamp,
+            holdbackMs: LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS,
           });
         }
       } catch (error) {
@@ -9414,6 +9460,66 @@ class IPCHandlers {
           meetingLocalWin.webContents.send("meeting-transcription-error", error.message);
         }
       }
+    };
+
+    const notifySelfHostedMeeting = (code) => {
+      const sentinel = SELF_HOSTED_MEETING_NOTICES[code];
+      if (!sentinel || !meetingLocalWin || meetingLocalWin.isDestroyed()) return;
+      meetingLocalWin.webContents.send("meeting-transcription-error", sentinel);
+    };
+
+    // Throws `selfHostedUrlInvalid` for an address the dictation stream would refuse too.
+    const createMeetingSelfHostedSession = (options) => {
+      let session = null;
+      try {
+        session = createSelfHostedMeetingSession({
+          baseUrl: options.baseUrl,
+          // Read per request, so a key saved mid-meeting is used from the next chunk.
+          getApiKey: () => this.environmentManager.getCustomTranscriptionKey(),
+          language: options.language || null,
+          model: options.model || null,
+          streamingUrl,
+          gate: (source, { pcm16k, chunk }) => {
+            const { rms, peak, sampleCount } = computeChunkStats(pcm16k);
+            const verdict = resolveMicChunkAction({
+              mode: "local",
+              source,
+              rms,
+              peak,
+              sampleCount,
+              isSystemSpeaking: () => meetingEchoLeakDetector.isSystemSpeaking(chunk.startAt),
+            });
+            return { send: verdict.action !== "skip", reason: verdict.reason };
+          },
+          onTranscript: ({ source, text, startAt, endAt, speechStartAt }) => {
+            // A request that outlives a revocation or the session delivers nothing.
+            if (meetingSelfHostedSession !== session) return;
+            if (this._audioFeaturePolicy.activeFailure("meeting")) return;
+            deliverBatchMeetingTranscript({
+              source,
+              text,
+              // Where the speech starts on the audio timeline, not when the answer came.
+              segTimestamp: Math.round(speechStartAt ?? startAt),
+              audioStartedAt: startAt,
+              audioEndedAt: endAt,
+              holdbackMs: SELF_HOSTED_RISKY_MIC_SEGMENT_HOLDBACK_MS,
+            });
+          },
+          onNotice: (code, detail) => {
+            if (meetingSelfHostedSession !== session) return;
+            debugLogger.info("Self-hosted meeting transcription notice", { code, ...detail });
+            notifySelfHostedMeeting(code);
+          },
+          log: (level, message, data) => {
+            const write = debugLogger[level] || debugLogger.debug;
+            write.call(debugLogger, message, data, "meeting");
+          },
+        });
+      } catch (error) {
+        debugLogger.warn("Self-hosted meeting URL rejected", { error: error.message }, "meeting");
+        throw new Error("selfHostedUrlInvalid");
+      }
+      return session;
     };
 
     const transcribeAllLocalBuffers = () => {
@@ -9470,6 +9576,8 @@ class IPCHandlers {
       this._activeMeetingNoteId = null;
       meetingLocalMode = false;
       meetingLocalBuffers = { mic: [], system: [] };
+      meetingSelfHostedSession?.abort();
+      meetingSelfHostedSession = null;
       if (meetingDiarizationStream) {
         meetingDiarizationStream.end();
         meetingDiarizationStream = null;
@@ -9972,6 +10080,16 @@ class IPCHandlers {
         return { success: true };
       }
 
+      // Batch requests need no warm connection; just refuse an unusable address early.
+      if (options.provider === "self-hosted") {
+        try {
+          createSelfHostedMeetingSession({ baseUrl: options.baseUrl, streamingUrl }).abort();
+          return { success: true };
+        } catch {
+          return { success: false, error: "selfHostedUrlInvalid" };
+        }
+      }
+
       const { mode: systemAudioMode } = await getMeetingSystemAudioPlan();
       const requestedConnectionKey = getMeetingConnectionKey(options, credentialGeneration);
 
@@ -10010,7 +10128,7 @@ class IPCHandlers {
     handleAudioFeature("meeting-transcription-prepare", "meeting", prepareMeetingTranscription);
 
     ipcMain.handle("meeting-transcription-cancel", async () => {
-      if (isMeetingStreamingConnected() || meetingLocalTimer) {
+      if (isMeetingStreamingConnected() || meetingLocalTimer || meetingSelfHostedSession) {
         return { success: false, reason: "recording-active" };
       }
       meetingTranscriptionPrepareInProgress = false;
@@ -10133,21 +10251,28 @@ class IPCHandlers {
           });
         }
 
-        if (options.provider === "local") {
+        if (options.provider === "local" || options.provider === "self-hosted") {
+          const selfHosted = options.provider === "self-hosted";
+          // Before any state changes, so a bad address leaves nothing to roll back.
+          const selfHostedSession = selfHosted ? createMeetingSelfHostedSession(options) : null;
           meetingLocalMode = true;
-          meetingLocalProvider = options.localProvider || "whisper";
-          meetingLocalModel = options.localModel || null;
+          meetingLocalProvider = selfHosted ? "self-hosted" : options.localProvider || "whisper";
+          meetingLocalModel = selfHosted ? null : options.localModel || null;
           meetingLocalLanguage = options.language || null;
           meetingLocalWin = BrowserWindow.fromWebContents(event.sender);
           meetingLocalBuffers = { mic: [], system: [] };
           meetingLocalTranscript = "";
+          meetingSelfHostedSession = selfHostedSession;
 
           await startLiveSpeakerIdentification(meetingLocalWin, systemAudioMode);
           await startMeetingAec(systemAudioMode);
 
-          meetingLocalTimer = setInterval(() => {
-            transcribeAllLocalBuffers();
-          }, LOCAL_MEETING_CHUNK_INTERVAL_MS);
+          // Self-hosted chunks are cut by the session as audio arrives, not on a clock.
+          if (!selfHosted) {
+            meetingLocalTimer = setInterval(() => {
+              transcribeAllLocalBuffers();
+            }, LOCAL_MEETING_CHUNK_INTERVAL_MS);
+          }
 
           ({ systemAudioMode, systemAudioStrategy } = await startMeetingSystemAudio(
             event,
@@ -10158,6 +10283,7 @@ class IPCHandlers {
 
           debugLogger.debug("Meeting transcription started in local mode", {
             provider: meetingLocalProvider,
+            ...(selfHosted ? { host: new URL(selfHostedSession.url).host } : {}),
             systemAudioMode,
             systemAudioStrategy,
           });
@@ -10495,6 +10621,8 @@ class IPCHandlers {
         clearInterval(meetingLocalTimer);
         meetingLocalTimer = null;
       }
+      // No more audio leaves for the server once the policy refuses the meeting.
+      meetingSelfHostedSession?.abort();
       if (wasActive) broadcastToWindows("meeting-transcription-error", reason);
       const stopped = meetingTranscriptionLifecycle.stopSession();
       // The renderer still needs this result after its capture cleanup to bind
@@ -10537,7 +10665,12 @@ class IPCHandlers {
         if (meetingLocalMode) {
           try {
             await settleLocalMeetingTranscription();
-            if (!this._audioFeaturePolicy.activeFailure("meeting"))
+            if (meetingSelfHostedSession) {
+              // Cut the tails and wait (bounded) for queued chunks before the
+              // transcript and diarization are captured.
+              const drained = await meetingSelfHostedSession.finish();
+              if (drained.abandoned > 0) notifySelfHostedMeeting("drain_incomplete");
+            } else if (!this._audioFeaturePolicy.activeFailure("meeting"))
               await transcribeAllLocalBuffers();
           } catch (err) {
             debugLogger.error("Local meeting final transcription failed", { error: err.message });

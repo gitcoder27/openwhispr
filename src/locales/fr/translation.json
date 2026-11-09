@@ -2702,7 +2702,15 @@
         }
       },
       "meetingEnterpriseOnly": "Votre organisation n'autorise que la transcription cloud d'entreprise, qui ne couvre pas encore l'enregistrement des réunions.",
-      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec OpenWhispr Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus."
+      "meetingCloudSignedOut": "Les enregistrements de notes ne peuvent pas démarrer avec OpenWhispr Cloud tant que vous êtes déconnecté. Choisissez un autre moteur ci-dessus.",
+      "meetingSelfHosted": {
+        "shared": "Utilise le serveur auto-hébergé et la clé API configurés pour la dictée. Les modifications ici s'appliquent aussi à la dictée.",
+        "urlMissing": "Ajoutez l'adresse de votre serveur.",
+        "urlInvalid": "Utilisez une adresse https://. http:// ne fonctionne que pour un serveur sur cet ordinateur.",
+        "apiKeyHelp": "Envoyée à ce serveur comme jeton Bearer. Partagée avec la dictée.",
+        "batchNote": "Les réunions sont envoyées en courts segments coupés aux pauses : le texte apparaît quelques secondes après la conversation.",
+        "languageNote": "Les serveurs Parakeet v3 transcrivent 25 langues européennes ; la parole dans d'autres langues peut être mal transcrite."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3631,7 +3639,15 @@
       "description": "Transcriptions et résumés structurés",
       "back": "Retour",
       "restrictedByOrg": "La transcription des réunions est restreinte par votre organisation.",
-      "unsupportedSelfHosted": "L'enregistrement de notes ne peut pas encore utiliser un serveur auto-hébergé. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
+      "selfHostedUrlMissing": "L'enregistrement de notes utilise votre serveur auto-hébergé, mais aucune adresse n'est enregistrée. Ajoutez-la dans Réglages → Reconnaissance vocale → Enregistrement de notes.",
+      "selfHostedUrlInvalid": "L'adresse du serveur auto-hébergé est inutilisable. Utilisez une adresse https:// (http:// ne fonctionne que pour cet ordinateur).",
+      "selfHosted": {
+        "unauthorized": "Votre serveur auto-hébergé a refusé la clé API : cette réunion n'est plus transcrite. Vérifiez la clé dans Réglages → Reconnaissance vocale.",
+        "notFound": "Votre serveur auto-hébergé n'a pas de point de transcription à cette adresse : cette réunion n'est plus transcrite. Vérifiez l'URL du serveur.",
+        "unreachable": "Impossible de joindre votre serveur auto-hébergé. L'enregistrement continue et OpenWhispr garde l'audio pour le transcrire quand le serveur sera de retour.",
+        "audioDropped": "Votre serveur auto-hébergé est injoignable depuis trop longtemps. L'audio non transcrit le plus ancien a été supprimé pour faire de la place.",
+        "drainIncomplete": "Votre serveur auto-hébergé n'a pas terminé à temps : la fin de cette réunion peut manquer dans la transcription."
+      },
       "unsupportedProvider": "L'enregistrement de notes ne peut pas utiliser {{provider}} pour la transcription en direct. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "noProviderSelected": "Aucun fournisseur n'est sélectionné pour l'enregistrement de notes. Ouvrez les Réglages et choisissez Local ou un fournisseur en streaming.",
       "signInRequired": "L'enregistrement de notes nécessite d'être connecté. Veuillez vous connecter.",

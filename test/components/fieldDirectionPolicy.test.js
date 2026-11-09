@@ -77,6 +77,8 @@ const EXPECTED_SHARED_FIELD_DIRECTIONS = {
   "src/components/settings/DictationAgentSettings.tsx": ["auto"],
   "src/components/settings/EnterpriseAudioSettings.tsx": ["ltr"],
   "src/components/settings/EnterpriseCheckoutDialog.tsx": ["inherit"],
+  // A server address is always Latin script.
+  "src/components/settings/MeetingSelfHostedPanel.tsx": ["ltr"],
   "src/components/settings/ProfileSection.tsx": ["auto", "ltr", "ltr", "ltr"],
   "src/components/settings/WorkspaceDeveloperTab.tsx": ["auto"],
   "src/components/settings/WorkspaceSection.tsx": ["auto"],

@@ -2702,7 +2702,15 @@
         }
       },
       "meetingEnterpriseOnly": "Ihre Organisation erlaubt nur Unternehmens-Cloud-Transkription, die Besprechungsaufnahmen noch nicht abdeckt.",
-      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine."
+      "meetingCloudSignedOut": "Notizaufnahmen mit OpenWhispr Cloud können nicht starten, solange Sie abgemeldet sind. Wählen Sie oben eine andere Engine.",
+      "meetingSelfHosted": {
+        "shared": "Verwendet den selbst gehosteten Server und API-Schlüssel des Diktats. Änderungen hier gelten auch für das Diktat.",
+        "urlMissing": "Füge die Adresse deines Servers hinzu.",
+        "urlInvalid": "Nutze eine https://-Adresse. http:// funktioniert nur für einen Server auf diesem Computer.",
+        "apiKeyHelp": "Wird als Bearer-Token an diesen Server gesendet. Wird mit dem Diktat geteilt.",
+        "batchNote": "Meetings werden in kurzen, an Pausen geschnittenen Abschnitten gesendet, daher erscheint der Text einige Sekunden nach dem Gesagten.",
+        "languageNote": "Parakeet-v3-Server transkribieren 25 europäische Sprachen; Sprache in anderen Sprachen kann falsch erkannt werden."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3631,7 +3639,15 @@
       "description": "Transkriptionen und strukturierte Zusammenfassungen",
       "back": "Zurück",
       "restrictedByOrg": "Die Transkription von Besprechungen ist durch Ihre Organisation eingeschränkt.",
-      "unsupportedSelfHosted": "Die Notizaufnahme kann noch keinen selbst gehosteten Endpunkt verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
+      "selfHostedUrlMissing": "Die Notizaufnahme nutzt deinen selbst gehosteten Server, aber es ist keine Serveradresse gespeichert. Füge sie unter Einstellungen → Spracherkennung → Notizaufnahme hinzu.",
+      "selfHostedUrlInvalid": "Die Adresse des selbst gehosteten Servers kann nicht verwendet werden. Nutze eine https://-Adresse (http:// funktioniert nur für diesen Computer).",
+      "selfHosted": {
+        "unauthorized": "Dein selbst gehosteter Server hat den API-Schlüssel abgelehnt, daher wird dieses Meeting nicht mehr transkribiert. Prüfe den Schlüssel unter Einstellungen → Spracherkennung.",
+        "notFound": "Dein selbst gehosteter Server bietet unter dieser Adresse keinen Transkriptions-Endpunkt, daher wird dieses Meeting nicht mehr transkribiert. Prüfe die Server-URL.",
+        "unreachable": "Dein selbst gehosteter Server ist nicht erreichbar. Die Aufnahme läuft weiter und OpenWhispr behält das Audio, um es zu transkribieren, sobald der Server wieder da ist.",
+        "audioDropped": "Dein selbst gehosteter Server ist zu lange nicht erreichbar. Das älteste noch nicht transkribierte Audio wurde verworfen, um Platz zu schaffen.",
+        "drainIncomplete": "Dein selbst gehosteter Server ist nicht rechtzeitig fertig geworden, daher fehlt im Transkript eventuell das Ende dieses Meetings."
+      },
       "unsupportedProvider": "Die Notizaufnahme kann {{provider}} nicht für die Live-Transkription verwenden. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "noProviderSelected": "Für die Notizaufnahme ist kein Anbieter ausgewählt. Öffne die Einstellungen und wähle Lokal oder einen Streaming-Anbieter.",
       "signInRequired": "Für die Notizaufnahme musst du angemeldet sein. Bitte melde dich an.",

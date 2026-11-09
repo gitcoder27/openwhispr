@@ -245,7 +245,7 @@ test("automatic Custom fallbacks never inherit another provider's endpoint", asy
   assert.equal(raw.cleanupCloudBaseUrl, unrelatedEndpoint);
 });
 
-test("Note Recording never inherits an unsupported self-hosted policy fallback", async (t) => {
+test("Note Recording keeps a self-hosted selection a policy allows", async (t) => {
   installBrowserGlobals(t, {
     initialStorage: {
       _providerSettingsMigrated: "1",
@@ -278,8 +278,9 @@ test("Note Recording never inherits an unsupported self-hosted policy fallback",
   const effective = getSettings();
   assert.equal(effective.transcriptionMode, "self-hosted");
   assert.equal(effective.uploadTranscriptionMode, "self-hosted");
-  assert.equal(effective.meetingTranscriptionMode, "local");
-  assert.equal(effective.meetingUseLocalWhisper, true);
+  // Self-hosted Note Recording runs on the server's batch endpoint now.
+  assert.equal(effective.meetingTranscriptionMode, "self-hosted");
+  assert.equal(effective.meetingUseLocalWhisper, false);
 });
 
 test("a managed screen-context denial forces the effective setting off without touching the preference", async (t) => {

@@ -2386,7 +2386,15 @@
         }
       },
       "meetingEnterpriseOnly": "A sua organização só permite transcrição em nuvem corporativa, que ainda não abrange a gravação de reuniões.",
-      "meetingCloudSignedOut": "As gravações de notas não podem começar no OpenWhispr Cloud enquanto você estiver desconectado. Escolha outro motor acima."
+      "meetingCloudSignedOut": "As gravações de notas não podem começar no OpenWhispr Cloud enquanto você estiver desconectado. Escolha outro motor acima.",
+      "meetingSelfHosted": {
+        "shared": "Usa o servidor auto-hospedado e a chave de API configurados para o ditado. As alterações aqui também valem para o ditado.",
+        "urlMissing": "Adicione o endereço do seu servidor.",
+        "urlInvalid": "Use um endereço https://. http:// só funciona para um servidor neste computador.",
+        "apiKeyHelp": "Enviada a este servidor como token Bearer. Compartilhada com o ditado.",
+        "batchNote": "As reuniões são enviadas em segmentos curtos cortados nas pausas, então o texto aparece alguns segundos depois da conversa.",
+        "languageNote": "Servidores Parakeet v3 transcrevem 25 idiomas europeus; a fala em outros idiomas pode sair errada."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3279,7 +3287,15 @@
       "description": "Transcrições e resumos estruturados",
       "back": "Voltar",
       "restrictedByOrg": "A transcrição de reuniões está restrita pela sua organização.",
-      "unsupportedSelfHosted": "A gravação de notas ainda não pode usar um endpoint auto-hospedado. Abra as Configurações e escolha Local ou um provedor de streaming.",
+      "selfHostedUrlMissing": "A gravação de notas usa seu servidor auto-hospedado, mas nenhum endereço está salvo. Adicione-o em Configurações → Fala para texto → Gravação de notas.",
+      "selfHostedUrlInvalid": "O endereço do servidor auto-hospedado não pode ser usado. Use um endereço https:// (http:// só funciona para este computador).",
+      "selfHosted": {
+        "unauthorized": "Seu servidor auto-hospedado recusou a chave de API, então esta reunião não está mais sendo transcrita. Verifique a chave em Configurações → Fala para texto.",
+        "notFound": "Seu servidor auto-hospedado não tem um endpoint de transcrição neste endereço, então esta reunião não está mais sendo transcrita. Verifique a URL do servidor.",
+        "unreachable": "Não foi possível acessar seu servidor auto-hospedado. A gravação continua e o OpenWhispr guarda o áudio para transcrever quando o servidor voltar.",
+        "audioDropped": "Seu servidor auto-hospedado está inacessível há tempo demais. O áudio mais antigo ainda não transcrito foi descartado para liberar espaço.",
+        "drainIncomplete": "Seu servidor auto-hospedado não terminou a tempo, então o final desta reunião pode faltar na transcrição."
+      },
       "unsupportedProvider": "A gravação de notas não pode usar {{provider}} para transcrição ao vivo. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "noProviderSelected": "Nenhum provedor está selecionado para a gravação de notas. Abra as Configurações e escolha Local ou um provedor de streaming.",
       "signInRequired": "A gravação de notas exige que você entre na sua conta. Entre para continuar.",

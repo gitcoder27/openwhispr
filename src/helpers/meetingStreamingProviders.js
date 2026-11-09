@@ -13,9 +13,17 @@ const STREAMING_CLIENT_BY_PROVIDER = {
   "tinfoil-realtime": TinfoilRealtimeStreaming,
 };
 
+// Providers that transcribe buffered chunks in the main process rather than
+// through a realtime client: on-device engines, and a self-hosted server's
+// batch endpoint (selfHostedMeetingSession.js).
+const BATCH_MEETING_PROVIDERS = new Set(["local", "self-hosted"]);
+
 // Derived from the registry so an allowed provider can never lack a client
 // class and silently fall through to the OpenAI default.
-const ALLOWED_MEETING_PROVIDERS = new Set(["local", ...Object.keys(STREAMING_CLIENT_BY_PROVIDER)]);
+const ALLOWED_MEETING_PROVIDERS = new Set([
+  ...BATCH_MEETING_PROVIDERS,
+  ...Object.keys(STREAMING_CLIENT_BY_PROVIDER),
+]);
 
 const getMeetingStreamingClient = (provider) => {
   const StreamingClient = STREAMING_CLIENT_BY_PROVIDER[provider];
@@ -48,6 +56,7 @@ const getMeetingConnectionKey = (options = {}, credentialGeneration = null) =>
   });
 
 module.exports = {
+  BATCH_MEETING_PROVIDERS,
   STREAMING_CLIENT_BY_PROVIDER,
   ALLOWED_MEETING_PROVIDERS,
   getMeetingStreamingClient,

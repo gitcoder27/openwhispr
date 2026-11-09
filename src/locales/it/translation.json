@@ -2407,7 +2407,15 @@
         }
       },
       "meetingEnterpriseOnly": "La tua organizzazione consente solo la trascrizione su cloud aziendale, che non copre ancora la registrazione delle riunioni.",
-      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con OpenWhispr Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra."
+      "meetingCloudSignedOut": "Le registrazioni delle note non possono avviarsi con OpenWhispr Cloud finché non hai effettuato l'accesso. Scegli un altro motore qui sopra.",
+      "meetingSelfHosted": {
+        "shared": "Usa il server self-hosted e la chiave API configurati per la dettatura. Le modifiche qui valgono anche per la dettatura.",
+        "urlMissing": "Aggiungi l'indirizzo del tuo server.",
+        "urlInvalid": "Usa un indirizzo https://. http:// funziona solo per un server su questo computer.",
+        "apiKeyHelp": "Inviata a questo server come token Bearer. Condivisa con la dettatura.",
+        "batchNote": "Le riunioni vengono inviate in brevi segmenti tagliati sulle pause, quindi il testo appare qualche secondo dopo la conversazione.",
+        "languageNote": "I server Parakeet v3 trascrivono 25 lingue europee; il parlato in altre lingue potrebbe risultare errato."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3279,7 +3287,15 @@
       "description": "Trascrizioni e riassunti strutturati",
       "back": "Indietro",
       "restrictedByOrg": "La trascrizione delle riunioni è limitata dalla tua organizzazione.",
-      "unsupportedSelfHosted": "La registrazione delle note non può ancora usare un endpoint self-hosted. Apri le Impostazioni e scegli Locale o un provider in streaming.",
+      "selfHostedUrlMissing": "La registrazione delle note usa il tuo server self-hosted, ma non è salvato alcun indirizzo. Aggiungilo in Impostazioni → Riconoscimento vocale → Registrazione delle note.",
+      "selfHostedUrlInvalid": "L'indirizzo del server self-hosted non è utilizzabile. Usa un indirizzo https:// (http:// funziona solo per questo computer).",
+      "selfHosted": {
+        "unauthorized": "Il tuo server self-hosted ha rifiutato la chiave API, quindi questa riunione non viene più trascritta. Controlla la chiave in Impostazioni → Riconoscimento vocale.",
+        "notFound": "Il tuo server self-hosted non ha un endpoint di trascrizione a questo indirizzo, quindi questa riunione non viene più trascritta. Controlla l'URL del server.",
+        "unreachable": "Impossibile raggiungere il tuo server self-hosted. La registrazione continua e OpenWhispr conserva l'audio per trascriverlo quando il server torna disponibile.",
+        "audioDropped": "Il tuo server self-hosted è irraggiungibile da troppo tempo. L'audio non trascritto più vecchio è stato scartato per fare spazio.",
+        "drainIncomplete": "Il tuo server self-hosted non ha finito in tempo, quindi la fine di questa riunione potrebbe mancare dalla trascrizione."
+      },
       "unsupportedProvider": "La registrazione delle note non può usare {{provider}} per la trascrizione dal vivo. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "noProviderSelected": "Nessun provider selezionato per la registrazione delle note. Apri le Impostazioni e scegli Locale o un provider in streaming.",
       "signInRequired": "La registrazione delle note richiede l'accesso. Accedi, per favore.",

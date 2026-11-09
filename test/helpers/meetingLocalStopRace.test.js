@@ -79,6 +79,7 @@ function harness({
     let meetingLocalModel = null;
     let meetingLocalLanguage = null;
     let meetingLocalTranscribePromise = null;
+    let meetingSelfHostedSession = null;
     let meetingDiarizationSegments = [];
     let meetingNoteId = null;
     let meetingSpeakerIndexBase = 0;
@@ -330,6 +331,7 @@ function chunkHarness() {
     const meetingLocalModel = "parakeet";
     const meetingLocalLanguage = "en";
     const LOCAL_MEETING_CHUNK_INTERVAL_MS = 5000;
+    const LOCAL_RISKY_MIC_SEGMENT_HOLDBACK_MS = 6000;
     const meetingEchoLeakDetector = { isSystemSpeaking: () => false };
     const downsample24kTo16k = (pcm) => pcm;
     const computeChunkStats = () => ({ rms: 1, peak: 1, sampleCount: 2 });
@@ -341,7 +343,7 @@ function chunkHarness() {
     const hasRiskyMicDuplicateProfile = () => false;
     const sendMeetingFinalSegment = (segment) => finals.push(segment.text);
 
-    ${sliceBetween("const transcribeLocalMeetingChunk =", "const transcribeAllLocalBuffers =")}
+    ${sliceBetween("const deliverBatchMeetingTranscript =", "const notifySelfHostedMeeting =")}
 
     globalThis.transcribe = () => transcribeLocalMeetingChunk("system");
     `,

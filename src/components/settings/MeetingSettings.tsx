@@ -13,6 +13,7 @@ import { InferenceModeSelector, SettingsRow } from "../ui/SettingsSection";
 import type { InferenceModeOption } from "../ui/SettingsSection";
 import { Toggle } from "../ui/toggle";
 import TranscriptionModelPicker from "../TranscriptionModelPicker";
+import MeetingSelfHostedPanel from "./MeetingSelfHostedPanel";
 import type { InferenceMode } from "../../types/electron";
 import {
   getMeetingStreamingTranscriptionProviders,
@@ -132,8 +133,6 @@ export function MeetingTranscriptionPanel() {
         label: t("settingsPage.transcription.modes.selfHosted"),
         description: t("settingsPage.transcription.modes.selfHostedDesc"),
         icon: <Network className="w-4 h-4" />,
-        disabled: true,
-        badge: t("common.comingSoon"),
       },
     ],
     "transcription",
@@ -145,7 +144,6 @@ export function MeetingTranscriptionPanel() {
   );
   const handleTranscriptionModeSelect = (mode: InferenceMode) => {
     if (!isModeAllowed(mode)) return;
-    if (mode === "self-hosted") return;
     if (mode === "openwhispr" && !isSignedIn) {
       requestSignIn();
       return;
@@ -277,6 +275,9 @@ export function MeetingTranscriptionPanel() {
       {managed.kind === "manual" &&
         effectiveTranscriptionMode === "local" &&
         renderTranscriptionPicker("local")}
+      {managed.kind === "manual" && effectiveTranscriptionMode === "self-hosted" && (
+        <MeetingSelfHostedPanel />
+      )}
       <MeetingSpeakerDetectionRow />
       <MeetingEchoCancellationRow />
     </div>

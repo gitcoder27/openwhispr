@@ -2407,7 +2407,15 @@
         }
       },
       "meetingEnterpriseOnly": "貴組織僅允許企業雲端轉錄，尚不支援會議錄音。",
-      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。"
+      "meetingCloudSignedOut": "未登入時，無法使用 OpenWhispr Cloud 開始筆記錄音。請在上方選擇其他引擎。",
+      "meetingSelfHosted": {
+        "shared": "使用為聽寫設定的自架伺服器與 API 金鑰。此處的變更同樣適用於聽寫。",
+        "urlMissing": "請新增伺服器位址。",
+        "urlInvalid": "請使用 https:// 位址。http:// 僅適用於本機上的伺服器。",
+        "apiKeyHelp": "以 Bearer 權杖傳送給此伺服器。與聽寫共用。",
+        "batchNote": "會議以在停頓處切分的短片段傳送，因此文字會比對話晚幾秒出現。",
+        "languageNote": "Parakeet v3 伺服器支援 25 種歐洲語言；其他語言的語音可能轉寫錯誤。"
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3279,7 +3287,15 @@
       "description": "轉錄與結構化摘要",
       "back": "返回",
       "restrictedByOrg": "會議轉錄已被您的組織限制。",
-      "unsupportedSelfHosted": "筆記錄音尚不支援自架端點。請開啟設定，選擇本機或支援串流的服務商。",
+      "selfHostedUrlMissing": "筆記錄音已設為使用你的自架伺服器，但尚未儲存伺服器位址。請在 設定 → 語音轉文字 → 筆記錄音 中新增。",
+      "selfHostedUrlInvalid": "無法使用此自架伺服器位址。請使用 https:// 位址（http:// 僅適用於本機上的伺服器）。",
+      "selfHosted": {
+        "unauthorized": "你的自架伺服器拒絕了 API 金鑰，此會議已停止轉寫。請在 設定 → 語音轉文字 中檢查金鑰。",
+        "notFound": "此位址上的自架伺服器沒有轉寫端點，此會議已停止轉寫。請檢查伺服器 URL。",
+        "unreachable": "無法連線到你的自架伺服器。錄音會繼續，OpenWhispr 會保留音訊，待伺服器恢復後再轉寫。",
+        "audioDropped": "你的自架伺服器已長時間無法連線。為騰出空間，已捨棄最早的未轉寫音訊。",
+        "drainIncomplete": "你的自架伺服器未能及時完成，此會議結尾部分可能未出現在轉寫中。"
+      },
       "unsupportedProvider": "筆記錄音無法使用 {{provider}} 進行即時轉錄。請開啟設定，選擇本機或支援串流的服務商。",
       "noProviderSelected": "尚未為筆記錄音選擇服務商。請開啟設定，選擇本機或支援串流的服務商。",
       "signInRequired": "筆記錄音需要登入，請先登入。",

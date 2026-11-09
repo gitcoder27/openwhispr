@@ -35,13 +35,28 @@ const MEETING_ERROR_KEYS: Record<string, string> = {
   accountChanged: "notes.meeting.stoppedAccountChanged",
   // An enterprise recording ended because the active workspace changed.
   workspaceChanged: "notes.meeting.stoppedWorkspaceChanged",
-  unsupportedSelfHosted: "notes.meeting.unsupportedSelfHosted",
+  selfHostedUrlMissing: "notes.meeting.selfHostedUrlMissing",
+  selfHostedUrlInvalid: "notes.meeting.selfHostedUrlInvalid",
+  // Self-hosted meeting transcription, reported by the main process mid-recording.
+  selfHostedUnauthorized: "notes.meeting.selfHosted.unauthorized",
+  selfHostedNotFound: "notes.meeting.selfHosted.notFound",
+  selfHostedUnreachable: "notes.meeting.selfHosted.unreachable",
+  selfHostedAudioDropped: "notes.meeting.selfHosted.audioDropped",
+  selfHostedDrainIncomplete: "notes.meeting.selfHosted.drainIncomplete",
   unsupportedProvider: "notes.meeting.unsupportedProvider",
   noProviderSelected: "notes.meeting.noProviderSelected",
   signInRequired: "notes.meeting.signInRequired",
   // Mid-recording, so no Sign in action: signing in reloads this window and the recording with it.
   signInExpired: "notes.meeting.signInExpired",
 };
+
+// Recoverable conditions the recording keeps running through: shown as a
+// plain notice, not an error.
+const MEETING_WARNING_SENTINELS = new Set([
+  "selfHostedUnreachable",
+  "selfHostedAudioDropped",
+  "selfHostedDrainIncomplete",
+]);
 
 export default function MeetingRecordingMount(): null {
   const { t } = useTranslation();
@@ -99,11 +114,12 @@ export default function MeetingRecordingMount(): null {
     const [sentinel, argument] = error.split(":");
     const errorKey = sentinel === "managedConfig" ? argument : MEETING_ERROR_KEYS[sentinel];
     const needsSignIn = sentinel === "signInRequired";
+    const warning = MEETING_WARNING_SENTINELS.has(sentinel);
     toast({
       title: t("notes.meeting.title"),
       description: errorKey ? t(errorKey, { provider: argument }) : error,
-      variant: "destructive",
-      duration: needsSignIn || sentinel === "signInExpired" ? 8000 : undefined,
+      variant: warning ? undefined : "destructive",
+      duration: needsSignIn || sentinel === "signInExpired" || warning ? 8000 : undefined,
       actions: needsSignIn ? [{ label: t("common.signIn"), onClick: requestSignIn }] : undefined,
       actionsAlign: needsSignIn ? "end" : undefined,
     });

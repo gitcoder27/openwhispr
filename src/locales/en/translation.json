@@ -2702,7 +2702,15 @@
         }
       },
       "meetingEnterpriseOnly": "Your organization only allows enterprise cloud transcription, which does not cover meeting recording yet.",
-      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above."
+      "meetingCloudSignedOut": "Note recordings can't start on OpenWhispr Cloud while you're signed out. Choose another engine above.",
+      "meetingSelfHosted": {
+        "shared": "Uses the self-hosted server and API key set up for dictation. Changes here apply to dictation too.",
+        "urlMissing": "Add your server's address.",
+        "urlInvalid": "Use an https:// address. Plain http:// works only for a server on this computer.",
+        "apiKeyHelp": "Sent to this server as a Bearer token. Shared with dictation.",
+        "batchNote": "Meetings are sent in short segments cut at pauses, so text appears a few seconds behind the conversation.",
+        "languageNote": "Parakeet v3 servers transcribe 25 European languages; speech in other languages may come out wrong."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3631,7 +3639,15 @@
       "description": "Transcriptions & structured summaries",
       "back": "Back",
       "restrictedByOrg": "Meeting transcription is restricted by your organization.",
-      "unsupportedSelfHosted": "Note Recording can't use a self-hosted endpoint yet. Open Settings and choose Local or a streaming provider.",
+      "selfHostedUrlMissing": "Note Recording is set to your self-hosted server, but no server address is saved. Add it in Settings → Speech-to-Text → Note Recording.",
+      "selfHostedUrlInvalid": "The self-hosted server address can't be used. Use an https:// address (plain http:// works only for this computer).",
+      "selfHosted": {
+        "unauthorized": "Your self-hosted server rejected the API key, so this meeting is no longer being transcribed. Check the key in Settings → Speech-to-Text.",
+        "notFound": "Your self-hosted server has no transcription endpoint at this address, so this meeting is no longer being transcribed. Check the server URL.",
+        "unreachable": "Can't reach your self-hosted server. Recording continues and OpenWhispr keeps the audio to transcribe when the server is back.",
+        "audioDropped": "Your self-hosted server has been unreachable for too long. The oldest untranscribed audio was discarded to make room.",
+        "drainIncomplete": "Your self-hosted server didn't finish in time, so the end of this meeting may be missing from the transcript."
+      },
       "unsupportedProvider": "Note Recording can't use {{provider}} for live transcription. Open Settings and choose Local or a streaming provider.",
       "noProviderSelected": "No provider is selected for Note Recording. Open Settings and choose Local or a streaming provider.",
       "signInRequired": "Note Recording requires you to be signed in. Please sign in.",

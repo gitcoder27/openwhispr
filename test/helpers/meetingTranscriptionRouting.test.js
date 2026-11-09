@@ -10,7 +10,8 @@ const modelRegistryData = require("../../src/models/modelRegistryData.json");
 // MeetingRecordingMount looks up. A healed legacy profile can reach any of them,
 // so an untranslated one would show a bare sentinel in the failure toast.
 const SENTINEL_KEYS = {
-  unsupportedSelfHosted: "unsupportedSelfHosted",
+  selfHostedUrlMissing: "selfHostedUrlMissing",
+  selfHostedUrlInvalid: "selfHostedUrlInvalid",
   unsupportedProvider: "unsupportedProvider",
   noProviderSelected: "noProviderSelected",
 };
@@ -92,17 +93,91 @@ test("BYOK OpenAI never downgrades to managed cloud when its key is unavailable"
   );
 });
 
-test("self-hosted mode never follows a stale Tinfoil provider", async () => {
+test("self-hosted mode routes to the server's batch path, never a stale Tinfoil provider", async () => {
   const { resolveMeetingTranscriptionOptions } = await load();
 
-  assert.throws(
-    () =>
-      resolveMeetingTranscriptionOptions({
-        ...baseOptions,
-        transcriptionMode: "self-hosted",
-      }),
-    { message: "unsupportedSelfHosted" }
+  assert.deepEqual(
+    resolveMeetingTranscriptionOptions({
+      ...baseOptions,
+      transcriptionMode: "self-hosted",
+      remoteTranscriptionUrl: "  https://stt.example.com/v1  ",
+      remoteTranscriptionModel: "parakeet-tdt-0.6b-v3",
+    }),
+    {
+      provider: "self-hosted",
+      baseUrl: "https://stt.example.com/v1",
+      model: "parakeet-tdt-0.6b-v3",
+      language: "en",
+    }
   );
+});
+
+test("self-hosted options never carry a key and omit an empty model", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  const options = resolveMeetingTranscriptionOptions({
+    ...baseOptions,
+    transcriptionMode: "self-hosted",
+    remoteTranscriptionUrl: "http://127.0.0.1:8770",
+    remoteTranscriptionModel: " ",
+  });
+  assert.deepEqual(options, {
+    provider: "self-hosted",
+    baseUrl: "http://127.0.0.1:8770",
+    language: "en",
+  });
+  assert.equal(JSON.stringify(options).toLowerCase().includes("key"), false);
+});
+
+test("self-hosted mode without a usable URL fails with a sentinel", async () => {
+  const { resolveMeetingTranscriptionOptions } = await load();
+
+  for (const [remoteTranscriptionUrl, message] of [
+    [undefined, "selfHostedUrlMissing"],
+    ["   ", "selfHostedUrlMissing"],
+    ["not a url", "selfHostedUrlInvalid"],
+    // Plain HTTP only reaches this machine; anything else needs HTTPS.
+    ["http://192.168.1.20:8770", "selfHostedUrlInvalid"],
+    ["https://user:pass@stt.example.com", "selfHostedUrlInvalid"],
+    ["https://stt.example.com/?key=abc", "selfHostedUrlInvalid"],
+    ["ftp://stt.example.com", "selfHostedUrlInvalid"],
+  ]) {
+    assert.throws(
+      () =>
+        resolveMeetingTranscriptionOptions({
+          ...baseOptions,
+          transcriptionMode: "self-hosted",
+          remoteTranscriptionUrl,
+        }),
+      { message },
+      JSON.stringify(remoteTranscriptionUrl)
+    );
+  }
+});
+
+test("self-hosted URL rules match the main process's streamingUrl", async () => {
+  const { isUsableSelfHostedUrl } = await load();
+  const { streamingUrl } = require("../../src/helpers/orukeetStreaming");
+
+  for (const url of [
+    "https://stt.example.com",
+    "https://stt.example.com/v1/audio/transcriptions",
+    "wss://stt.example.com",
+    "http://localhost:8770",
+    "http://127.0.0.1:8770/",
+    "http://[::1]:8770",
+    "http://10.0.0.5:8770",
+    "https://a:b@stt.example.com",
+    "https://stt.example.com/#x",
+  ]) {
+    let accepted = true;
+    try {
+      streamingUrl(url);
+    } catch {
+      accepted = false;
+    }
+    assert.equal(isUsableSelfHostedUrl(url), accepted, url);
+  }
 });
 
 test("local mode wins over stale cloud provider state", async () => {

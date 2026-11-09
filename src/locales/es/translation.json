@@ -2459,7 +2459,15 @@
         }
       },
       "meetingEnterpriseOnly": "Tu organización solo permite la transcripción en nube empresarial, que aún no cubre la grabación de reuniones.",
-      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba."
+      "meetingCloudSignedOut": "Las grabaciones de notas no pueden iniciarse con OpenWhispr Cloud sin haber iniciado sesión. Elige otro motor arriba.",
+      "meetingSelfHosted": {
+        "shared": "Usa el servidor propio y la clave de API configurados para el dictado. Los cambios aquí también se aplican al dictado.",
+        "urlMissing": "Añade la dirección de tu servidor.",
+        "urlInvalid": "Usa una dirección https://. http:// solo funciona con un servidor en este ordenador.",
+        "apiKeyHelp": "Se envía a este servidor como token Bearer. Compartida con el dictado.",
+        "batchNote": "Las reuniones se envían en segmentos cortos cortados en las pausas, así que el texto aparece unos segundos por detrás de la conversación.",
+        "languageNote": "Los servidores Parakeet v3 transcriben 25 idiomas europeos; el habla en otros idiomas puede salir mal."
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3331,7 +3339,15 @@
       "description": "Transcripciones y resúmenes estructurados",
       "back": "Atrás",
       "restrictedByOrg": "La transcripción de reuniones está restringida por tu organización.",
-      "unsupportedSelfHosted": "La grabación de notas aún no puede usar un servidor propio. Abre Ajustes y elige Local o un proveedor de streaming.",
+      "selfHostedUrlMissing": "La grabación de notas usa tu servidor propio, pero no hay ninguna dirección guardada. Añádela en Ajustes → Voz a texto → Grabación de notas.",
+      "selfHostedUrlInvalid": "No se puede usar la dirección de tu servidor propio. Usa una dirección https:// (http:// solo funciona para este ordenador).",
+      "selfHosted": {
+        "unauthorized": "Tu servidor propio rechazó la clave de API, así que esta reunión ya no se está transcribiendo. Revisa la clave en Ajustes → Voz a texto.",
+        "notFound": "Tu servidor propio no tiene un endpoint de transcripción en esta dirección, así que esta reunión ya no se está transcribiendo. Revisa la URL del servidor.",
+        "unreachable": "No se puede contactar con tu servidor propio. La grabación continúa y OpenWhispr guarda el audio para transcribirlo cuando el servidor vuelva.",
+        "audioDropped": "Tu servidor propio lleva demasiado tiempo sin responder. Se descartó el audio más antiguo sin transcribir para liberar espacio.",
+        "drainIncomplete": "Tu servidor propio no terminó a tiempo, así que puede faltar el final de esta reunión en la transcripción."
+      },
       "unsupportedProvider": "La grabación de notas no puede usar {{provider}} para transcripción en vivo. Abre Ajustes y elige Local o un proveedor de streaming.",
       "noProviderSelected": "No hay ningún proveedor seleccionado para la grabación de notas. Abre Ajustes y elige Local o un proveedor de streaming.",
       "signInRequired": "La grabación de notas requiere iniciar sesión. Por favor, inicia sesión.",

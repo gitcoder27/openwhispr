@@ -2407,7 +2407,15 @@
         }
       },
       "meetingEnterpriseOnly": "贵组织仅允许企业云转录，暂不支持会议录音。",
-      "meetingCloudSignedOut": "未登录时，无法使用 OpenWhispr Cloud 开始笔记录音。请在上方选择其他引擎。"
+      "meetingCloudSignedOut": "未登录时，无法使用 OpenWhispr Cloud 开始笔记录音。请在上方选择其他引擎。",
+      "meetingSelfHosted": {
+        "shared": "使用为听写设置的自托管服务器和 API 密钥。此处的更改同样适用于听写。",
+        "urlMissing": "请添加服务器地址。",
+        "urlInvalid": "请使用 https:// 地址。http:// 仅适用于本机上的服务器。",
+        "apiKeyHelp": "作为 Bearer 令牌发送给此服务器。与听写共用。",
+        "batchNote": "会议以在停顿处切分的短片段发送，因此文字会比对话晚几秒出现。",
+        "languageNote": "Parakeet v3 服务器支持 25 种欧洲语言；其他语言的语音可能转写错误。"
+      }
     },
     "intelligence": {
       "gpuDevice": {
@@ -3279,7 +3287,15 @@
       "description": "转录与结构化摘要",
       "back": "返回",
       "restrictedByOrg": "会议转录已被您的组织限制。",
-      "unsupportedSelfHosted": "笔记录音暂不支持自托管端点。请打开设置，选择本地或支持流式传输的服务商。",
+      "selfHostedUrlMissing": "笔记录音已设为使用你的自托管服务器，但尚未保存服务器地址。请在 设置 → 语音转文字 → 笔记录音 中添加。",
+      "selfHostedUrlInvalid": "无法使用该自托管服务器地址。请使用 https:// 地址（http:// 仅适用于本机上的服务器）。",
+      "selfHosted": {
+        "unauthorized": "你的自托管服务器拒绝了 API 密钥，此会议已停止转写。请在 设置 → 语音转文字 中检查密钥。",
+        "notFound": "该地址上的自托管服务器没有转写端点，此会议已停止转写。请检查服务器 URL。",
+        "unreachable": "无法连接到你的自托管服务器。录音会继续，OpenWhispr 会保留音频，待服务器恢复后再转写。",
+        "audioDropped": "你的自托管服务器已长时间无法连接。为腾出空间，已丢弃最早的未转写音频。",
+        "drainIncomplete": "你的自托管服务器未能及时完成，此会议结尾部分可能未出现在转写中。"
+      },
       "unsupportedProvider": "笔记录音无法使用 {{provider}} 进行实时转录。请打开设置，选择本地或支持流式传输的服务商。",
       "noProviderSelected": "尚未为笔记录音选择服务商。请打开设置，选择本地或支持流式传输的服务商。",
       "signInRequired": "笔记录音需要登录，请先登录。",

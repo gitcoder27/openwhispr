@@ -215,6 +215,10 @@ const getMeetingTranscriptionOptions = () => {
       cortiEnvironment: state.cortiEnvironment,
       cortiTenant: state.cortiTenant,
       keyterms: getKeytermDictionaryWords(state).filter(Boolean),
+      // Note Recording reuses dictation's self-hosted server (Settings shows that
+      // address); the key is read in the main process only.
+      remoteTranscriptionUrl: state.remoteTranscriptionUrl,
+      remoteTranscriptionModel: state.remoteTranscriptionModel,
     }),
     enterpriseIdentity,
     enterpriseSetupMode: state.enterpriseTranscriptionSetupMode,
